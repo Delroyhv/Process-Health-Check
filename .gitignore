@@ -1,0 +1,32 @@
+# Legacy Prometheus wrappers (superseded by gsc_prometheus.sh)
+gsc_container_prometheus.sh
+gsc_docker_prometheus.sh
+
+# macOS
+.DS_Store
+
+# Release bundles produced by `make bundle`
+*.tar.xz
+*.xz
+*.zipv
+# Runtime log output
+*.log
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Go build artifacts (partition_growth/build/ binaries are intentionally tracked)
+partition_growth/*.test
+
+# Temporary directories created by scripts
+tmp/
+temp/
+
+# Distribution/Staging
+release/
+processhealth/
+
+# Gemini CLI
+gemini-cli-linux-amd64.tar.gz
+gemini*
+release.sh
