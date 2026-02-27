@@ -1,0 +1,112 @@
+[
+ {
+  "EventID":"A01001",
+  "Description":"Services uptime status",
+  "Query":"round(sum by (job) (rate(up {job!~'Metadata-Cache'}[1m])),0.01)+((sum by (job) (up{job!~'Metadata-Cache'})) == bool 0)",
+  "Warning":"> 0",
+  "Error":"",
+  "Label":"job"
+ },
+ {
+  "EventID":"A01002",
+  "Description":"Verify if DLS DELETE_BACKEND_OBJECTS is stuck",
+  "Query":"round(delta(lifecycle_policy_examine_latency_seconds_count{policy='DELETE_BACKEND_OBJECTS'}[%PROBESTEP]), 0.01)",
+  "Label":"instance",
+  "Error":"== 0",
+  "ConsecutiveProbes":"10", "_comments": "must get N=10 consecutive probes that match an Error condition to trigger an event"
+ },
+ {
+  "EventID":"A01003",
+  "Description":"Verify if DLS DELETE_BACKEND_OBJECTS examine is slow",
+  "Query":"round(sum(delta(lifecycle_policy_examine_latency_seconds_count{policy='DELETE_BACKEND_OBJECTS'}[%PROBESTEP]))-0.1*(sum(metadata_clientobject_part_active_count)))",
+  "Warning":"< 0"
+ },
+ {
+  "EventID":"A01004",
+  "Description":"Verify if DLS VERSION_EXPIRATION is stuck",
+  "Query":"round(delta(lifecycle_policy_examine_latency_seconds_count{policy='VERSION_EXPIRATION'}[%PROBESTEP]), 0.01)",
+  "Label":"instance",
+  "Error":"== 0",
+  "ConsecutiveProbes":"10"
+ },
+ {
+  "EventID":"A01005",
+  "Description":"Verify if DLS TOMBSTONE_DELETION is stuck",
+  "Query":"round(delta(lifecycle_policy_examine_latency_seconds_count{policy='TOMBSTONE_DELETION'}[%PROBESTEP]), 0.01)",
+  "Warning":"== 0",
+  "Label":"instance",
+  "ConsecutiveProbes":"10"
+ },
+ {
+  "EventID":"A01006",
+  "Description":"Check the number Data-Lifecycle (DLS) instances",
+  "Query":"sum(up{job='Data-Lifecycle'})",
+  "Warning":"< 3"
+ },
+ {
+  "EventID":"A01007",
+  "Description":"Check the number Message-Queue instances",
+  "Query":"sum(up{job='Message-Queue'})",
+  "Error":"!= 3"
+ },
+ {
+  "EventID":"A01008",
+  "Description":"DLS DELETE_BACKEND_OBJECTS - error rate for Metadata category",
+  "Query":"round(sum(rate(lifecycle_policy_errors_total{category='Metadata', policy='DELETE_BACKEND_OBJECTS'}[1h])),0.1)",
+  "Error":"> 0"
+ },
+ {
+  "EventID":"A01009",
+  "Description":"DLS DELETE_BACKEND_OBJECTS - error rate for S3 category",
+  "Query":"round(sum(rate(lifecycle_policy_errors_total{category='S3', policy='DELETE_BACKEND_OBJECTS'}[1h])),0.1)",
+  "Warning":"> 0",
+  "Error":"> 100000"
+ },
+ {
+  "EventID":"A01010",
+  "Description":"Verify DLS DELETE_BACKEND_OBJECTS rate against S3 Delete Object Versions rate, accounting for MPU (parts per interval, e.g. per day)",
+  "Query":"round(100*(sum(delta(http_s3_servlet_delete_requests_per_bucket_total{delete_type='versioned'}[%PROBESTEP]))+sum(delta(lifecycle_policy_accept_latency_seconds_count{policy='VERSION_EXPIRATION'}[%PROBESTEP]))+sum(delta(http_s3_servlet_operations_total{operation='S3PutObjectPartOperation'}[%PROBESTEP]))-sum(delta(http_s3_servlet_operations_total{operation='S3CompleteMultipartUploadOperation'}[%PROBESTEP]))-sum(delta(lifecycle_policy_accept_latency_seconds_count{policy='DELETE_BACKEND_OBJECTS'}[%PROBESTEP])))/(sum(delta(http_s3_servlet_delete_requests_per_bucket_total{delete_type='versioned'}[%PROBESTEP]))+sum(delta(lifecycle_policy_accept_latency_seconds_count{policy='VERSION_EXPIRATION'}[%PROBESTEP]))+sum(delta(http_s3_servlet_operations_total{operation='S3PutObjectPartOperation'}[%PROBESTEP]))-sum(delta(http_s3_servlet_operations_total{operation='S3CompleteMultipartUploadOperation'}[%PROBESTEP]))))",
+  "Warning":"> 25"
+ },
+ {
+  "EventID":"A01011",
+  "Description":"Verify if DLS DELETE_BACKEND_OBJECTS is stuck - no progress examining objects for 2 days",
+  "Query":"round(delta(lifecycle_policy_examine_latency_seconds_count{policy='DELETE_BACKEND_OBJECTS'}[24h]), 0.01)",
+  "Label":"instance",
+  "Error":"== 0",
+  "Step":"68400",
+  "ConsecutiveProbes":"2"
+ },
+ {
+  "EventID":"A01012",
+  "Description":"Verify if DLS DELETE_BACKEND_OBJECTS examine is slow - number of examined objects in 24h is <10% of total active objects/parts",
+  "Query":"round(sum(delta(lifecycle_policy_examine_latency_seconds_count{policy='DELETE_BACKEND_OBJECTS'}[%PROBESTEP]))-0.1*(sum(metadata_clientobject_part_active_count)))",
+  "Warning":"< 0",
+  "Step":"68400"
+ },
+ {
+  "EventID":"A01014",
+  "Description":"Verify if DLS VERSION_EXPIRATION is stuck - no progress examining objects for 2 days",
+  "Query":"round(delta(lifecycle_policy_examine_latency_seconds_count{policy='VERSION_EXPIRATION'}[24h]), 0.01)",
+  "Label":"instance",
+  "Error":"== 0",
+  "Step":"68400",
+  "ConsecutiveProbes":"2"
+ },
+ {
+  "EventID":"A01015",
+  "Description":"Consider if Bucket Expiration Lifecycle policy should be configured",
+  "Query":"round(sum by (bucket)(http_s3_servlet_delete_requests_per_bucket_total{delete_type='latest'}))",
+  "Label":"bucket",
+  "Warning":"> 100000",
+  "Step":"68400"
+ },
+ {
+  "EventID":"A01016",
+  "Description":"DLS VERSION_EXPIRATION policy is slow OR some buckets may need Bucket Expiration Lifecycle policy",
+  "Query":"round(100*(sum(delta(lifecycle_policy_accept_latency_seconds_count{policy='VERSION_EXPIRATION'}[24h])))/(1+sum(delta(http_s3_servlet_delete_requests_per_bucket_total{delete_type='latest'}[24h]))),0.1)",
+  "Warning":"< 50 - % of DLS VERSION_EXPIRATION to number of S3 Delete Objects (unversioned)",
+  "ConsecutiveProbes":"7",
+  "Step":"68400"
+ }
+]

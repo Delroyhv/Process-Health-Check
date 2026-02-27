@@ -1,0 +1,241 @@
+.TH EXPAND_HCPCS_SUPPORT 1 "2026-02-25" "Process Health v1.1.52" "HCP Cloud Scale Health Check"
+.SH NAME
+expand_hcpcs_support.sh \- expand HCP CS support bundles and generate Prometheus healthcheck configs
+.SH SYNOPSIS
+.SS Full mode (expand + healthcheck generation)
+.B expand_hcpcs_support.sh
+.RB [ \-r
+.IR dir ]
+.RB [ \-f
+.IR archive ]\ .\|.\|.
+.RB [ \-\-no\-healthcheck ]
+.RB [ \-o
+.IR version ]
+.RB [ \-s
+.IR host ]
+.RB [ \-p
+.IR port ]
+.RB [ \-d
+.IR dir ]
+.RB [ \-e ]
+.SS Healthcheck-only mode (update existing healthcheck.conf)
+.B expand_hcpcs_support.sh
+.B \-\-healthcheck\-only
+.B \-u
+.RB [ \-p
+.IR port ]
+.RB [ \-s
+.IR host ]
+.RB [ \-o
+.IR version ]
+.RB [ \-f
+.IR conf ]
+.SS Healthcheck-only mode (generate config from a psnap)
+.B expand_hcpcs_support.sh
+.B \-\-healthcheck\-only
+.B \-P
+.IR psnap.tar.xz
+.RB [ \-p
+.IR port ]
+.RB [ \-s
+.IR host ]
+.RB [ \-u ]
+.SH DESCRIPTION
+.B expand_hcpcs_support.sh
+has two operating modes:
+.SS Full mode (default)
+Searches
+.I \-\-root\-dir
+for
+.I supportLogs_*.tar.xz
+archives and extracts each one into a timestamped subdirectory.  Any
+.I *Prometheus*.tar.xz
+files found are renamed to the standard
+.I psnap_YYYY-Mon-DD_HH-MM-SS.tar.xz
+convention.  For each psnap a
+.I healthcheck.conf
+is written containing the Prometheus connection parameters needed by
+.BR runchk.sh .
+.PP
+The HCP CS product version is auto-detected from
+.I setup.json
+inside the extracted archive.  Use
+.B \-o
+to override it.
+.PP
+When more than one psnap resides in the same SupportLog directory the
+first uses
+.I healthcheck.conf
+and subsequent ones use
+.IR healthcheck.conf\-YYYY-MM-DDTHH:MM:SS .
+.SS Healthcheck-only mode (\-\-healthcheck\-only)
+No extraction is performed.  The mode has two sub-cases:
+.TP
+.B With \-P \fIpsnap\fR
+Generates a fresh
+.I healthcheck.conf
+for the given psnap file and moves the psnap into the correct SupportLog
+directory if it is not already there.  Add
+.B \-u
+to update an existing config rather than overwriting it.
+.TP
+.B With \-u (no \-P)
+Updates the existing
+.I healthcheck.conf
+in the current directory (or the path given with
+.BR \-f ),
+changing only the fields explicitly provided on the command line
+.RB ( \-p ,
+.BR \-s ,
+.BR \-o ,
+.BR \-d ).
+All other fields are preserved exactly as written.  This is the form used
+in Step 4 of the standard workflow.
+.SH OPTIONS
+.SS Core options
+.TP
+.BR \-r ", " \-\-root\-dir " \fIDIR\fR"
+Root directory to search for support log archives.
+Default:
+.I .
+.TP
+.B \-\-no\-healthcheck
+Unpack support logs but skip
+.I healthcheck.conf
+generation for all psnap files.
+.TP
+.B \-\-healthcheck\-only
+Do not unpack anything; only operate on healthcheck configuration.
+Requires either
+.B \-P
+or
+.BR \-u .
+.TP
+.BR \-u ", " \-\-update
+In
+.B \-\-healthcheck\-only
+mode: update an existing
+.I healthcheck.conf
+instead of overwriting it.  Only fields explicitly supplied on the CLI
+are changed.
+.TP
+.BR \-P ", " \-\-psnap " \fIFILE\fR"
+Prometheus snapshot archive to process in
+.B \-\-healthcheck\-only
+mode.
+.SS Healthcheck options
+.TP
+.BR \-o ", " \-\-os_version " \fIVER\fR"
+HCP CS version string (e.g.
+.IR 2.6.0 ).
+Overrides the value auto-detected from
+.I setup.json
+inside the extracted archive.
+.TP
+.BR \-s ", " \-\-prom_server " \fIHOST\fR"
+Prometheus server hostname or IP address.
+Default:
+.I 127.0.0.1
+.TP
+.BR \-p ", " \-\-port " \fIPORT\fR"
+Prometheus server port.
+Default:
+.I 9090
+.TP
+.BR \-d ", " \-\-dir " \fIDIR\fR"
+Installation directory for the health check scripts, written into
+.I healthcheck.conf
+as
+.IR _install_dir .
+Default:
+.I /usr/local/bin/
+.TP
+.BR \-f ", " \-\-file " \fIFILE\fR"
+In
+.B full
+mode: a specific support log archive to process (may be repeated to
+process multiple archives explicitly instead of auto-discovery).
+.br
+In
+.B \-\-healthcheck\-only
+mode: path to the
+.I healthcheck.conf
+file to create or update.
+Default:
+.I healthcheck.conf
+.SS Space-estimation options
+.TP
+.BR \-e ", " \-\-estimate
+Before extracting, check available free space and warn or abort if
+insufficient.
+.TP
+.B \-\-estimate\-only
+Print space estimates but do not extract anything.
+.TP
+.B \-\-no\-space\-check
+Disable free-space checking even when
+.B \-e
+was specified.
+.SS Other
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary and exit.
+.TP
+.BR \-V ", " \-\-version
+Print the script version and exit.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+A required argument was missing, a file was not found, or an unexpected
+error occurred.
+.SH FILES
+.TP
+.I supportLogs_*.tar.xz
+Support log archives discovered and extracted by full mode.
+.TP
+.I *Prometheus*.tar.xz
+Prometheus snapshot archives renamed to
+.I psnap_*.tar.xz
+by full mode.
+.TP
+.I psnap_YYYY-Mon-DD_HH-MM-SS.tar.xz
+Normalised Prometheus snapshot filename.
+.TP
+.I healthcheck.conf
+Generated or updated Prometheus connection parameter file consumed by
+.BR runchk.sh .
+.TP
+.I setup.json
+Cluster setup file inside the extracted support bundle; used for
+automatic HCP CS version detection.
+.SH EXAMPLES
+.SS Expand a full support bundle
+.EX
+expand_hcpcs_support.sh \-r /ci/05304447
+.EE
+.SS Expand but skip healthcheck generation
+.EX
+expand_hcpcs_support.sh \-r /ci/05304447 \-\-no\-healthcheck
+.EE
+.SS Generate a fresh healthcheck.conf for a specific psnap
+.EX
+expand_hcpcs_support.sh \-\-healthcheck\-only \e
+    \-P psnap_2025\-Nov\-26_20\-48\-48.tar.xz \-p 9092
+.EE
+.SS Update only the port in an existing healthcheck.conf (Step 4 of workflow)
+.EX
+expand_hcpcs_support.sh \-\-healthcheck\-only \-u \-p 9092
+.EE
+.SS Update port and server address
+.EX
+expand_hcpcs_support.sh \-\-healthcheck\-only \-u \-p 9092 \-s 192.0.2.10
+.EE
+.SH SEE ALSO
+.BR gsc_prometheus (1),
+.BR runchk (1),
+.BR hcpcs\-health\-check (7)
+.SH AUTHORS
+Hitachi Vantara GSC

@@ -1,0 +1,165 @@
+[
+ {
+  "EventID":"A00001",
+  "Description":"High used capacity percentage for DB (per node)",
+  "Query":"round(100*(metadata_used_capacity_bytes{store!~'aggregate'} / (metadata_used_capacity_bytes{store!~'aggregate'}+metadata_available_capacity_bytes{store!~'aggregate'})))",
+  "Warning":"> 70",
+  "Error":"> 85",
+  "Label":"store"
+ },
+ {
+  "EventID":"A00002",
+  "Description":"High storage used capacity percentage (per S-node)",
+  "Query":"round(100*(storage_used_capacity_bytes{store!~'aggregate'}/storage_total_capacity_bytes{store!~'aggregate'}))",
+  "Warning":"> 70",
+  "Error":"> 85",
+  "Label":"store"
+ },
+ {
+  "EventID":"A00003",
+  "Description":"Services uptime status - service restarted",
+  "Query":"round(sum by (job) (rate(up {job!~'Metadata-Cache'}[1m])),0.01)+((sum by (job) (up{job!~'Metadata-Cache'})) == bool 0)",
+  "Label":"job",
+  "Warning":"> 0"
+ },
+ {
+  "EventID":"A00004",
+  "Description":"S3 error rate is >10% for at least 10 min",
+  "Query":"round(sum(delta(http_s3_servlet_errors_total{error=~'InternalError|RequestTimeout|ServiceUnavailable'}[1m]))/(0.0000001+sum(delta(http_s3_servlet_operations_total[1m]))), 0.1)*100",
+  "ConsecutiveProbes":"10",
+  "Error":"> 10",
+  "Step":"60"
+ },
+ {
+  "EventID":"A00005", 
+  "Description":"DLS DELETE_BACKEND_OBJECTS error rate for General category is >10% for at least 10 min",
+  "Query":"round(sum(delta(lifecycle_policy_errors_total{category='General', policy='DELETE_BACKEND_OBJECTS'}[%PROBESTEP])))",
+  "ConsecutiveProbes":"10",
+  "Error":"> 10",
+  "Step":"60"
+ },
+ {
+  "EventID":"A00006",
+  "Description":"DLS S3 error rate is >10% for at least 10 min",
+  "Query":"round(sum(delta(lifecycle_policy_errors_total{category='S3', policy='DELETE_BACKEND_OBJECTS'}[1m])) / (0.0000001+sum(delta(lifecycle_policy_accept_latency_seconds_count{policy='DELETE_BACKEND_OBJECTS'}[1m]))), 0.1)*100",
+  "ConsecutiveProbes":"10",
+  "Error":"> 10",
+  "Step":"60"
+ },
+ {
+  "EventID":"A00007",
+  "Description":"Low number of Data-Lifecycle (DLS) instances",
+  "Query":"sum(up{job='Data-Lifecycle'})",
+  "Warning":"< 3"
+ },
+ {
+  "EventID":"A00008",
+  "Description":"Low number of S3 Gateway instances",
+  "Query":"sum(up{job='S3-Gateway'})",
+  "Warning":"< 3"
+ },
+ {
+  "EventID":"A00009",
+  "Description":"Unexpected number of Message-Queue instances",
+  "Query":"sum(up{job='Message-Queue'})",
+  "Error":"!= 3"
+ },
+ {
+  "EventID":"A00010",
+  "Description":"Unexpected number of Policy-Engine instances",
+  "Query":"sum(up{job='Policy-Engine'})",
+  "Error":"!= 3"
+ },
+ {
+  "EventID":"A00011",
+  "Description":"Unexpected number of KMS/Vault instances",
+  "Query":"sum(up{job='Key-Management-Server'})",
+  "Error":"!= 3"
+ }, 
+ {
+  "EventID":"A00012",
+  "Description":"High number of DB Partitions per node (normal:<1000, high:>1000, dangerous:>1500, critical:>2000)",
+  "Query":"(max(mcs_partitions_per_instance))",
+  "Warning":"> 1000", "_comments": "warning if >1000 partitions per node (high)",
+  "Error": "> 2000", "_comments": "error if >2000 partitions per node (critical); dangerous >1500 checked offline by chk_partInfo.sh"
+ },
+ {
+  "EventID":"A00013",
+  "Description":"Low available local capacity for DB in bytes (per node)", 
+  "Query":"metadata_available_capacity_bytes", 
+  "Warning":"< 500000000000",  "_comments": "warning if <500000000000 bytes (500GB)",
+  "Error":"< 200000000000", "_comments": "error if <200000000000 bytes (200GB)",
+  "Label":"store"
+ },
+ {
+  "EventID":"A00014",
+  "Description":"High undeleted objects backlog (number of objects/parts to be deleted on S-nodes)",
+  "Query":"(sum(storage_total_objects{store='aggregate'}) - sum(metadata_clientobject_part_active_count)) * (count(sum(lifecycle_policy_rekey_initiated_count_total OR on() vector(0)) ==0) + (count(sum(lifecycle_policy_rekey_initiated_count_total) > 1) OR on() vector(0)) )",
+  "Warning":"> 10000000", 
+  "Error":"> 1000000000"
+ },
+ {
+  "EventID":"A00015",
+  "Description":"High percentage of undeleted objects backlog to total number of objects/parts stored on S-nodes",
+  "Query":"round(100*(sum(storage_total_objects{store='aggregate'}) - sum(metadata_clientobject_part_active_count))/ sum(storage_total_objects{store='aggregate'}))",
+  "Warning":"> 10", "_comments": "warning if undeleted objects/parts are >10% of total number of objects/parts stored on S-nodes",
+  "Error":"> 15"
+ },
+ {
+  "EventID":"A00016",
+  "Description": "Alert if any database instance has entered error mode, resulting in a loss of availability. Contact Hitachi support if error.",
+  "Query":"sum(myrtle_updates_rejected_total)",
+  "Error":"> 0"
+ },
+ {
+  "EventID":"A00017",
+  "Description":"DLS Delete Backend Objects policy health (activity check)",
+  "Query":"round(sum(delta(lifecycle_policy_examine_latency_seconds_count{policy='DELETE_BACKEND_OBJECTS'}[%PROBESTEP])),0.1)",
+  "Warning":"== 0 - Unhealthy or Idle - Delete Backend Objects"
+ },
+ {
+  "EventID":"A00018",
+  "Description":"DLS Expiration Version policy health (activity check)",
+  "Query":"round(sum(delta(lifecycle_policy_examine_latency_seconds_count{policy='VERSION_EXPIRATION'}[%PROBESTEP])),0.1)",
+  "Warning":"== 0 - Unhealthy or Idle - Version Expiration"
+ },
+ {
+  "EventID":"A00019",
+  "Description":"S3 I/O Balance",
+  "Query":"round(abs(100*(min (sum by (instance) (delta(http_s3_servlet_operations_total[24h]))))/(sum (delta(http_s3_servlet_operations_total[24h]))) / (100/sum(up{job='S3-Gateway'})) )*100,0.1)",
+  "Warning":"< 50",
+  "Step":"86400"
+ },
+ {
+  "EventID":"A00020",
+  "Description":"Metadata Balance",
+  "Query":"round(100* abs ((max (mcs_partitions_per_instance) - min (mcs_partitions_per_instance)) / avg (mcs_partitions_per_instance)))", 
+  "Warning":"> 35",
+  "Error":"> 50"
+ },
+ {
+  "EventID":"A00021",
+  "Description":"S3 error rate is high (>10%) for at least 10 min",
+  "Query":"round(sum(delta(http_s3_servlet_errors_total{error=~'InternalError|RequestTimeout|ServiceUnavailable'}[1m]))/(0.0000001+sum(delta(http_s3_servlet_operations_total[1m]))), 0.1)*100",
+  "ConsecutiveProbes":"10",
+  "Error":"> 10",
+  "Step":"60"
+ },
+ {
+  "EventID":"A00022",
+  "Description":"DLS DELETE_BACKEND_OBJECTS - error rate for General category",
+  "Query":"round(rate(lifecycle_policy_errors_total{category='General', policy='DELETE_BACKEND_OBJECTS'}[%PROBESTEP]), 0.01)",
+  "ConsecutiveProbes":"10",
+  "Label":"instance",
+  "Error":"> 10",
+  "Step":"60"
+ },
+ {
+  "EventID":"A00023",
+  "Description":"DLS S3 error rate is high (>10%) for at least 10 min",
+  "Query":"round(sum(delta(lifecycle_policy_errors_total{category='S3', policy='DELETE_BACKEND_OBJECTS'}[1m])) / (0.0000001+sum(delta(lifecycle_policy_accept_latency_seconds_count{policy='DELETE_BACKEND_OBJECTS'}[1m]))), 0.1)*100",
+  "ConsecutiveProbes":"10",
+  "Error":"> 10",
+  "Step":"60"
+ }
+]

@@ -1,0 +1,258 @@
+.TH HCPCS\-HEALTH\-CHECK 7 "2026-02-25" "Process Health v1.1.56" "HCP Cloud Scale Health Check"
+.SH NAME
+hcpcs\-health\-check \- end-to-end health check workflow for HCP Cloud Scale support bundles
+.SH SYNOPSIS
+.nf
+.B expand_hcpcs_support.sh
+.B cd
+.I <expanded-directory>
+.B sudo gsc_prometheus.sh
+.B expand_hcpcs_support.sh \-\-healthcheck\-only \-u \-p
+.I <PORT>
+.B runchk.sh
+.RB [ \-f
+.IR healthcheck.conf ]
+.RB [ \-\-full\-detail ]
+.RB [ \-\-no\-metrics ]
+.fi
+.SH DESCRIPTION
+This manual page describes the complete five-step workflow for analysing
+an HCP Cloud Scale (HCP CS) support bundle.  Each step is performed by a
+dedicated script; this page explains how they connect and what each
+produces.
+.PP
+The workflow assumes a support bundle has already been delivered, typically
+as one or more
+.I supportLogs_*.tar.xz
+archives, with one or more Prometheus snapshot archives
+.RI ( psnap_*.tar.xz
+or
+.I *Prometheus*.tar.xz )
+alongside them.
+.SH WORKFLOW
+.SS Step 1 \(em Expand the support bundle
+.PP
+.B expand_hcpcs_support.sh
+unpacks all
+.I supportLogs_*.tar.xz
+files found under the root directory, normalises any
+.I *Prometheus*.tar.xz
+filenames to the
+.I psnap_YYYY-Mon-DD_HH-MM-SS.tar.xz
+convention, and writes an initial
+.I healthcheck.conf
+for each psnap discovered.
+.PP
+.RS
+.EX
+expand_hcpcs_support.sh \-r /ci/05304447
+.EE
+.RE
+.PP
+After this step the directory tree looks similar to:
+.PP
+.RS
+.nf
+/ci/05304447/
+  05304447.supportLogs_2025-11-26_20-48-48_<node>.tar.xz
+  05304447.cluster_triage_2025-11-26_20-48-48.tar.20251126.1320.xz
+  2025-11-26_20-48-48/
+    cluster_triage/
+    collect_healthcheck_data/
+    psnap_2025-Nov-26_20-48-48.tar.xz
+    healthcheck.conf
+.fi
+.RE
+.SS Step 2 \(em Change into the expanded directory
+.PP
+Move into the timestamped directory that was just created so that
+.B gsc_prometheus.sh
+and
+.B runchk.sh
+can locate the
+.I psnap
+and
+.I healthcheck.conf
+files by relative path.
+.PP
+.RS
+.EX
+cd /ci/05304447/2025-11-26_20-48-48
+.EE
+.RE
+.SS Step 3 \(em Start the Prometheus container
+.PP
+.B gsc_prometheus.sh
+extracts the Prometheus snapshot archive into a working directory and
+starts a container (Docker or Podman, auto-detected) that serves that
+data.  It scans ports
+.B 9090\(en9200
+and selects the lowest free port, skipping ports already used by running
+containers and reserved exporter ports (9093, 9100, 8080, 9115, 9116,
+9104).
+.PP
+The selected port is printed at the end of the run:
+.PP
+.RS
+.EX
+sudo gsc_prometheus.sh \e
+    \-s 05304447 \e
+    \-c AcmeCorp \e
+    \-f psnap_2025-Nov-26_20-48-48.tar.xz \e
+    \-b /opt/prom_instances
+.EE
+.RE
+.PP
+Sample output (final line):
+.PP
+.RS
+.nf
+[ OK  ] Prometheus for AcmeCorp/05304447 started on port \fB9092\fR.
+.fi
+.RE
+.PP
+Note the port number; it is required for Step 4.
+.SS Step 4 \(em Update healthcheck.conf with the Prometheus port
+.PP
+.B expand_hcpcs_support.sh \-\-healthcheck\-only \-u
+patches the existing
+.I healthcheck.conf
+in place, writing only the fields supplied on the command line.  The
+.B \-u
+.RI ( \-\-update )
+flag preserves all other fields (timestamp, CS version, install directory)
+unchanged.
+.PP
+Replace
+.I PORT
+with the port printed in Step 3:
+.PP
+.RS
+.EX
+expand_hcpcs_support.sh \-\-healthcheck\-only \-u \-p 9092
+.EE
+.RE
+.PP
+To also set the Prometheus server address when it is not localhost:
+.PP
+.RS
+.EX
+expand_hcpcs_support.sh \-\-healthcheck\-only \-u \-p 9092 \-s 192.0.2.10
+.EE
+.RE
+.SS Step 5 \(em Run the health check suite
+.PP
+.B runchk.sh
+reads
+.I healthcheck.conf
+(supplied via
+.B \-f
+or as a positional argument), runs every check script in sequence, and
+aggregates all
+.BR WARNING ,
+.BR ERROR ,
+and
+.B CRITICAL
+lines from the resulting
+.I health_report_*.log
+files.  A total issue count is printed at the end.
+.PP
+By default the three data-intensive checks (disk performance, filesystem,
+journal messages) are skipped.  Pass
+.B \-\-full\-detail
+to include them.  Pass
+.B \-\-no\-metrics
+to skip the Prometheus query suite when no container is running.
+.PP
+.RS
+.EX
+# Core checks only
+runchk.sh \-f ./healthcheck.conf
+
+# Include disk, filesystem, and journal analysis
+runchk.sh \-f ./healthcheck.conf \-\-full\-detail
+
+# Core checks, Prometheus not yet started
+runchk.sh \-\-no\-metrics
+.EE
+.RE
+.SH COMPLETE WORKED EXAMPLE
+.nf
+# Step 1 \(em expand the bundle
+expand_hcpcs_support.sh \-r /ci/05304447
+
+# Step 2 \(em enter the expanded directory
+cd /ci/05304447/2025\-11\-26_20\-48\-48
+
+# Step 3 \(em start Prometheus (note port in final OK line)
+sudo gsc_prometheus.sh \e
+    \-s 05304447 \e
+    \-c AcmeCorp \e
+    \-f psnap_2025\-Nov\-26_20\-48\-48.tar.xz \e
+    \-b /opt/prom_instances
+# [ OK  ] Prometheus for AcmeCorp/05304447 started on port 9092.
+
+# Step 4 \(em patch healthcheck.conf with the port
+expand_hcpcs_support.sh \-\-healthcheck\-only \-u \-p 9092
+
+# Step 5 \(em run health checks (full detail)
+runchk.sh \-f ./healthcheck.conf \-\-full\-detail
+.fi
+.SH FILES
+.TP
+.I healthcheck.conf
+Prometheus connection parameters consumed by
+.BR runchk.sh .
+Written by
+.B expand_hcpcs_support.sh
+(Step 1) and updated in Step 4.  Contains
+.IR _prom_server ,
+.IR _prom_port ,
+.IR _prom_time_stamp ,
+.IR _cs_version ,
+and the
+.B PROM_CMD_PARAM_HOURLY
+/
+.B PROM_CMD_PARAM_DAILY
+query strings.
+.TP
+.I health_report_*.log
+Per-check output files written by each
+.I chk_*.sh
+script and
+.IR print_node_memory_summary.sh .
+Scanned by
+.B runchk.sh
+for
+.BR WARNING / ERROR / CRITICAL
+lines at the end of Step 5.
+.TP
+.I messages_warn.log
+Journal WARNING lines written by
+.BR chk_messages.sh .
+Not included in the aggregation grep; provided for manual review.
+.TP
+.I psnap_YYYY-Mon-DD_HH-MM-SS.tar.xz
+Prometheus snapshot archive extracted in Step 3.
+.SH SEE ALSO
+.BR expand_hcpcs_support (1),
+.BR gsc_prometheus (1),
+.BR runchk (1)
+.SH NOTES
+.IP \(bu 2
+.B gsc_prometheus.sh
+requires root (or equivalent container runtime privileges).
+Steps 1, 4, and 5 do not require elevated privileges.
+.IP \(bu 2
+When multiple psnap files exist in the same SupportLog directory each
+gets its own timestamped config
+.RI ( healthcheck.conf\-YYYY-MM-DDTHH:MM:SS ).
+Repeat Steps 3\(en5 for each config file.
+.IP \(bu 2
+The Prometheus container is started with
+.B \-\-rm
+by default and is removed when stopped.  Pass
+.B \-\-keep\-container
+in Step 3 to retain it across restarts.
+.SH AUTHORS
+Hitachi Vantara GSC

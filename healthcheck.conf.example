@@ -1,0 +1,10 @@
+#Health Check Configuration file Version 2
+#HCP CS version 2.5 or 2.6
+_cs_version="2.6"
+_prom_server="127.0.0.1"
+_prom_port="9102"
+_prom_time_stamp=""
+_install_dir="/usr/local/bin/"
+_prom_cmd_param_hourly="-c ${_prom_server} -n ${_prom_port} -t ${_prom_time_stamp} -i 360   -e 20 -f ${_install_dir}hcpcs_hourly_alerts.json"
+_prom_cmd_param_daily="-c ${_prom_server} -n ${_prom_port} -t ${_prom_time_stamp} -i 68400 -e 14 -f ${_install_dir}hcpcs_daily_alerts.json"
+_version_num="${_cs_version}"

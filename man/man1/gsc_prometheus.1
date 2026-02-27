@@ -1,0 +1,229 @@
+.TH GSC_PROMETHEUS 1 "2026-02-25" "Process Health v1.1.52" "HCP Cloud Scale Health Check"
+.SH NAME
+gsc_prometheus.sh \- extract a Prometheus snapshot and run it in Docker or Podman
+.SH SYNOPSIS
+.B sudo gsc_prometheus.sh
+.B \-s
+.I SR
+.B \-c
+.I CUSTOMER
+.B \-f
+.I PSNAP
+.B \-b
+.I BASEDIR
+.RB [ options ]
+.SH DESCRIPTION
+.B gsc_prometheus.sh
+extracts a Prometheus snapshot archive
+.RI ( psnap_*.tar.xz )
+into a working directory and starts a Prometheus container (using Docker
+or Podman, auto-detected) that serves the snapshot data.
+.PP
+It automatically selects the lowest free TCP port in the range
+.B 9090\(en9200
+by scanning ports already bound by the system and mapped to running
+containers.  The following ports are always excluded as they are reserved
+for common exporters:
+.B 9093
+(Alertmanager),
+.B 9100
+(node_exporter),
+.B 8080
+(generic HTTP),
+.B 9115
+(blackbox_exporter),
+.B 9116
+(SNMP exporter),
+.B 9104
+(mysqld_exporter).
+.PP
+When the container starts successfully the selected port is printed:
+.PP
+.RS
+.nf
+[ OK  ] Prometheus for \fICUSTOMER\fR/\fISR\fR started on port \fIPORT\fR.
+.fi
+.RE
+.PP
+If a
+.I healthcheck.conf
+file is found in the same directory as the snapshot file,
+.B _prom_port
+is automatically updated to the selected port.
+If no
+.I healthcheck.conf
+is present, note the port and supply it to
+.B expand_hcpcs_support.sh \-\-healthcheck\-only \-u \-p \fIPORT\fR
+before running
+.BR runchk.sh .
+See
+.BR hcpcs\-health\-check (7).
+.PP
+The container is named
+.IR gsc_prometheus_CUSTOMER_SR_PORT
+and is started with
+.B \-\-rm
+so it is removed automatically when stopped unless
+.B \-\-keep\-container
+is given.
+.SH OPTIONS
+.SS Required
+.TP
+.BR \-c ", " \-\-customer " \fINAME\fR"
+Customer name.  Used to construct the container name and the working
+directory path under
+.IR BASEDIR .
+.TP
+.BR \-s ", " \-\-service\-request " \fISR\fR"
+Service request or case number.  Combined with
+.I CUSTOMER
+to form the unique working directory and container name.
+.TP
+.BR \-f ", " \-\-snapshot\-file " \fIPATH\fR"
+Path to the Prometheus snapshot archive
+.RI ( psnap_*.tar.xz ).
+Must be an existing file.
+.TP
+.BR \-b ", " \-\-base\-directory " \fIPATH\fR"
+Base directory under which per-customer working directories are created.
+If it does not exist it will be created.  The final data path is
+.IR BASEDIR/CUSTOMER/SR/prom/data .
+.SS Optional
+.TP
+.BR \-C ", " \-\-config\-file " \fIPATH\fR"
+Key=value config file.  Supports the same keys as the CLI options:
+.IR customer ,
+.IR service_request ,
+.IR snapshot_file ,
+.IR base_directory ,
+.IR min_port ,
+.IR max_port ,
+.IR exclude_ports ,
+.IR engine ,
+.IR image .
+CLI options take precedence over config file values.
+.TP
+.B \-\-engine " auto|docker|podman"
+Force the container engine.  Default:
+.B auto
+(prefers Docker if both are present).
+.TP
+.B \-\-image " IMAGE"
+Prometheus container image to use.
+Default:
+.I docker.io/prom/prometheus:latest
+.TP
+.B \-\-replace
+Remove any existing container with the same name before starting.
+.TP
+.B \-\-keep\-container
+Start the container without
+.BR \-\-rm ;
+the container persists after it is stopped.
+.TP
+.B \-\-min\-port " N"
+Lowest port to consider.
+Default:
+.I 9090
+.TP
+.B \-\-max\-port " N"
+Highest port to consider.
+Default:
+.I 9200
+.TP
+.B \-\-exclude\-port " N"
+Exclude an additional port from selection.  May be repeated.
+.TP
+.BR \-e ", " \-\-estimate
+Check available disk space before extracting and warn or abort if
+insufficient.
+.TP
+.B \-\-estimate\-only
+Print space estimate and exit without extracting or starting the container.
+.TP
+.B \-\-no\-space\-check
+Disable free-space checking even when
+.B \-e
+was given.
+.TP
+.B \-\-debug
+Enable verbose diagnostic output.
+.TP
+.B \-\-no\-color
+Disable ANSI colour output.
+.TP
+.B \-\-version
+Print the script version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary and exit.
+.SH EXIT STATUS
+.TP
+.B 0
+Container started successfully.
+.TP
+.B 1
+A required argument was missing, the snapshot file was not found, no free
+port was available, or the container failed to start.
+.SH ENVIRONMENT
+.TP
+.B GSC_LIB_PATH
+Override the path to
+.I gsc_core.sh
+(default: same directory as the script).
+.TP
+.B GSC_PROM_LOG_DIR
+Override the directory used to store the last-used-port file.
+Default:
+.I /var/log/gsc_prometheus
+.SH FILES
+.TP
+.I BASEDIR/CUSTOMER/SR/prom/data/
+Extracted snapshot data directory.  Mounted into the container as
+.IR /prometheus .
+.TP
+.I BASEDIR/CUSTOMER/SR/prom/prometheus.yml
+Minimal Prometheus configuration written by the script.
+.TP
+.I /var/log/gsc_prometheus/v\fIVERSION\fR/last_used_port.txt
+Records the last allocated port so subsequent invocations start scanning
+from the next port rather than 9090.
+.SH EXAMPLES
+.SS Basic invocation (Step 3 of workflow)
+.EX
+sudo gsc_prometheus.sh \e
+    \-s 05304447 \e
+    \-c AcmeCorp \e
+    \-f psnap_2025\-Nov\-26_20\-48\-48.tar.xz \e
+    \-b /opt/prom_instances
+.EE
+.SS Force Podman and a specific port range
+.EX
+sudo gsc_prometheus.sh \e
+    \-s 05304447 \-c AcmeCorp \e
+    \-f psnap_2025\-Nov\-26_20\-48\-48.tar.xz \e
+    \-b /opt/prom_instances \e
+    \-\-engine podman \-\-min\-port 9150 \-\-max\-port 9160
+.EE
+.SS Check space before extracting a large snapshot
+.EX
+sudo gsc_prometheus.sh \e
+    \-s 05304447 \-c AcmeCorp \e
+    \-f psnap_2025\-Nov\-26_20\-48\-48.tar.xz \e
+    \-b /opt/prom_instances \-\-estimate\-only
+.EE
+.SS Replace an existing container for the same SR
+.EX
+sudo gsc_prometheus.sh \e
+    \-s 05304447 \-c AcmeCorp \e
+    \-f psnap_2025\-Nov\-26_20\-48\-48.tar.xz \e
+    \-b /opt/prom_instances \-\-replace
+.EE
+.SH SEE ALSO
+.BR expand_hcpcs_support (1),
+.BR runchk (1),
+.BR hcpcs\-health\-check (7),
+.BR docker (1),
+.BR podman (1)
+.SH AUTHORS
+Hitachi Vantara GSC
