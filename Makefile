@@ -4,9 +4,13 @@ VERSION := $(shell cat VERSION 2>/dev/null | tr -d '[:space:]')
 BUNDLE_NAME ?= process_health_$(VERSION)
 OUT ?= $(BUNDLE_NAME).tar.xz
 
-.PHONY: bundle lint bash-n docs
+.PHONY: bundle lint bash-n docs readme
 
-bundle:
+readme:
+	@sed -i 's/^\*\*Current version:\*\* .*/\*\*Current version:\*\* $(VERSION)/' README.md
+	@echo "README.md updated to version $(VERSION)"
+
+bundle: readme
 	@echo "Creating $(OUT)"
 	@tar -C . --exclude='./.git' --exclude='./.github' --exclude='*.tar.xz' --exclude='*.xz' --exclude='*.sha256' --exclude='./.claude' --exclude='./2026*' --exclude='./supportLogs*' --exclude='*.log' --exclude='*.log.*' --exclude='._*' -cJf "/tmp/$(OUT)" . && mv "/tmp/$(OUT)" "$(OUT)"
 	@echo "Wrote $(OUT)"

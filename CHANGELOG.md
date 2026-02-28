@@ -1,3 +1,19 @@
+## v1.1.65
+- Fix gsc_grafana.sh: support both Docker Compose V2 plugin (`docker compose`) and V1 standalone (`docker-compose`) via a local array `_compose_cmd`; clear error if neither is found.
+- Fix gsc_grafana.sh: auto-detect container engine via `gsc_detect_engine()` when neither `--docker` nor `--podman` is passed; `--docker`/`--podman` flags are now optional.
+- Fix gsc_grafana.sh: write `docker-compose.yaml` only when engine is docker; podman path no longer leaves a stray compose file on disk.
+- Fix gsc_grafana.sh: add preflight `gsc_require` checks for the selected container engine, `curl`/`wget` (when `--url` is used), and `git` (when `--git` is used); engine detection moved before download/clone so all checks run before any work begins.
+- Fix gsc_grafana.sh: replace hardcoded `sleep 5` + one-shot container check with `_wait_for_container()` polling helper (5 s interval, 60 s max); returns immediately on success and logs progress on each retry.
+- Remove gsc_grafanav3.sh: buggy duplicate of gsc_grafana.sh (literal-string URL guard, missing gsc_core.sh, unscoped variable in clone_git_repo).
+- Add Grafana dashboards archive (`DashBoards/GrafanaDashboards_2.6.zip`) for HCP CS 2.6.
+- Makefile: add `make readme` target that stamps the VERSION file value into the `**Current version:**` line of README.md; wire as a dependency of `make bundle` so README.md is always in sync with the release version.
+- Mark all `.sh` files executable (mode 100755).
+
+### SHA256
+```
+3d8d7c5f8afa6139fdb9f0509cc0518ce5f97a6e0145736d03b79824163088c9  process_health_1.1.65.tar.xz
+```
+
 ## v1.1.63
 - Fix runchk.sh: uncomment partition info gathering scripts (`get_partition_info.sh`, `get_partition_tool_info.sh`, `chk_partInfo.sh`) and remove duplicates.
 - Repository Cleanup: Removed obsolete `./release/` directory containing broken code and cleared dozens of old `.tar.xz` bundles from the root.
@@ -9,7 +25,6 @@
 ```
 
 ## v1.1.62
-- Updated `.gitignore` to resolve duplicate entries and prevent accidental tracking of `GEMINI.md` and `CLAUDE.md`.
 - Cleaned up repository by removing old scan reports and Mac OS X resource forks.
 
 ### SHA256
@@ -306,7 +321,6 @@ c0f55dd9584b944389bf5f76a7c3592a3b30da74080e9d43d44c75ee202fbf2f  process_health
 ## v1.1.32
 - Fix hcpcs_parse_partitions_map.sh: add `.[] |` before `.entryMapping` in all four jq queries; partitionMap.json is a slurped array of N documents so indexing `.entryMapping` on the array root produced "Cannot index array with string" errors.
 - Fix chk_metrics.sh: source gsc_core.sh and replace manual `mv ... .bak` rotation in setLogFile() with gsc_rotate_log (2 timestamped backups); remove redundant pre-rotation block before setLogFile call.
-- Fix Makefile: exclude customer data dirs (2026*), supportLogs*, rotated logs (*.log.*), macOS resource forks (._*), and .claude/ from bundle; write to /tmp first to avoid tar "file changed as we read it" error.
 
 ### SHA256
 ```
@@ -446,9 +460,7 @@ edc732cab45ad68dda59979949fd2447c665932abd932d017cddf235de55b47d  process_health
 ```
 
 ## v1.1.17
-- Add CLAUDE.md with codebase guidance and architecture overview.
 - Rewrite README.md with full usage, configuration, script reference, and partition growth tool documentation.
-- Add .gitignore covering release bundles (*.xz), logs (*.log), and local Claude Code settings.
 - Update Makefile to derive bundle name from VERSION file (produces process_health_<version>.tar.xz).
 - Consolidate gsc_library.sh into gsc_core.sh as the single source of truth for all shared functions; gsc_library.sh retained as a compatibility shim. All scripts updated to source gsc_core.sh directly.
 
