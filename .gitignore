@@ -8,7 +8,7 @@ gsc_docker_prometheus.sh
 # Release bundles produced by `make bundle`
 *.tar.xz
 *.xz
-*.zipv
+
 # Runtime log output
 *.log
 
@@ -30,3 +30,5 @@ processhealth/
 gemini-cli-linux-amd64.tar.gz
 gemini*
 release.sh
+CLAUDE.md
+dist/*.zip
