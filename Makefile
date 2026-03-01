@@ -1,6 +1,7 @@
 SHELL := /usr/bin/env bash
 
 VERSION := $(shell cat VERSION 2>/dev/null | tr -d '[:space:]')
+# VERSION now contains 'v1.1.x', so BUNDLE_NAME will be 'process_health_v1.1.x'
 BUNDLE_NAME ?= process_health_$(VERSION)
 OUT ?= $(BUNDLE_NAME).tar.xz
 

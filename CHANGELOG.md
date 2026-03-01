@@ -1,3 +1,14 @@
+## v1.1.67
+- Integrated partition growth analysis with gnuplot visualization.
+- Standardized all documentation examples with numeric dummy IDs (01234567).
+- Updated versioning methodology to use the 'v' prefix in filenames.
+- Scrubbed all AI tool references from the repository.
+
+### SHA256
+```
+2a7198d07b45a91326b8ba669ae80b3c89b0e64f363c7d50ab34dbce9e3ceddb  process_health_v1.1.67.tar.xz
+```
+
 ## v1.1.65
 - Fix gsc_grafana.sh: support both Docker Compose V2 plugin (`docker compose`) and V1 standalone (`docker-compose`) via a local array `_compose_cmd`; clear error if neither is found.
 - Fix gsc_grafana.sh: auto-detect container engine via `gsc_detect_engine()` when neither `--docker` nor `--podman` is passed; `--docker`/`--podman` flags are now optional.
