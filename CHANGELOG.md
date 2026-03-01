@@ -1,3 +1,15 @@
+## v1.2.00
+- **Major Update:** Integrated Go-based secure vault (`gsc_vault`) for AES-GCM credential encryption.
+- **Performance:** Optimized arithmetic and comparison logic using compiled Go utility (`gsc_calc`), replacing slow `bc` calls.
+- **Maintenance:** Centralized all common functions into `gsc_core.sh`.
+- **Resource Management:** Added robust `--cleanup` functionality to `gsc_prometheus.sh` and `gsc_grafana.sh` to release ports and containers.
+- **Compliance:** Established mandatory senior developer security review process for all commits.
+
+### SHA256
+```
+bbd89446a8ec1080e8ecf0cd0b8673f0584384782f2fd527b18142f2b0b22c2a  process_health_v1.2.00.tar.xz
+```
+
 ## v1.1.67
 - Integrated partition growth analysis with gnuplot visualization.
 - Standardized all documentation examples with numeric dummy IDs (01234567).

@@ -170,6 +170,66 @@ gsc_container_rm_if_exists() {
   esac
 }
 
+gsc_container_cleanup() {
+  # Usage: gsc_container_cleanup <runtime> <pattern> <override_confirm> [cleanup_volumes] [base_dir]
+  local _runtime="$1"
+  local _pattern="$2"
+  local _override="$3"
+  local _volumes="${4:-0}"
+  local _base_dir="${5:-}"
+
+  local _containers
+  _containers=$("${_runtime}" ps -a --format '{{.Names}}' | grep -E "${_pattern}" || true)
+
+  if [[ -z "${_containers}" ]]; then
+    gsc_log_info "No containers matching '${_pattern}' found to clean up."
+    return 0
+  fi
+
+  if [[ "${_override}" != "y" ]]; then
+    echo "WARNING: This will stop and remove the following containers:"
+    echo "${_containers}"
+    [[ "${_volumes}" -eq 1 ]] && echo "And DELETE their associated data directories."
+    
+    local _ans
+    read -p "Are you sure? (y/N): " _ans
+    [[ "${_ans,,}" != "y" ]] && gsc_die "Cleanup cancelled."
+    read -p "CONFIRM AGAIN: Are you REALLY sure? (y/N): " _ans
+    [[ "${_ans,,}" != "y" ]] && gsc_die "Cleanup cancelled."
+  fi
+
+  local _name
+  for _name in ${_containers}; do
+    gsc_log_info "Stopping and removing container: ${_name}"
+    "${_runtime}" stop "${_name}" >/dev/null 2>&1 || true
+    "${_runtime}" rm -f "${_name}" >/dev/null 2>&1 || true
+
+    if [[ "${_volumes}" -eq 1 ]]; then
+      local _target=""
+      if [[ "${_name}" =~ ^gsc_prometheus_ ]]; then
+        # gsc_prometheus_CUSTOMER_SR_PORT
+        local _cust _sr
+        _cust=$(echo "${_name}" | cut -d'_' -f3)
+        _sr=$(echo "${_name}" | cut -d'_' -f4)
+        [[ -n "${_base_dir}" ]] && _target="${_base_dir}/${_cust}/${_sr}"
+      elif [[ "${_name}" == "grafana" ]]; then
+        # Grafana deletes local dashboards/provisioning
+        [[ -d "dashboards" ]] && rm -rf "dashboards"
+        [[ -d "provisioning" ]] && rm -rf "provisioning"
+        [[ -f "docker-compose.yaml" ]] && rm -f "docker-compose.yaml"
+        gsc_log_info "Deleted local Grafana configuration directories."
+      fi
+
+      if [[ -n "${_target}" && -d "${_target}" ]]; then
+        gsc_log_info "Deleting data directory: ${_target}"
+        rm -rf "${_target}"
+      fi
+    fi
+  done
+
+  gsc_log_ok "Cleanup complete."
+}
+
 # -----------------------------
 # Safe tar extraction
 # -----------------------------
@@ -465,8 +525,109 @@ gsc_truncate_log() {
 }
 
 # -----------------------------
-# Timestamps
+# Display / UI
 # -----------------------------
+_gsc_spinner_idx=0
+gsc_spinner() {
+  local -a _spin=("-" "\\" "|" "/")
+  echo -ne "${_spin[$((_gsc_spinner_idx % 4))]} \r" >&2
+  ((_gsc_spinner_idx++))
+}
+
+# -----------------------------
+# Math / Comparison
+# -----------------------------
+gsc_compare_value() {
+  # Usage: gsc_compare_value <value> <operator> <limit>
+  # Returns the comparison string if true (e.g. "10 > 5"), else empty
+  local _val="$1"
+  local _op="$2"
+  local _lim="$3"
+  local _res=0
+
+  # Optimized path using Go binary if present
+  local _bin
+  _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_calc"
+  if [[ -x "${_bin}" ]]; then
+    local _out
+    _out=$("${_bin}" -op "${_op}" "${_val}" "${_lim}" 2>/dev/null)
+    if [[ -n "${_out}" ]]; then
+      printf '%s\n' "${_out}"
+      return 0
+    fi
+    return 0
+  fi
+
+  # Fallback to bc or basic bash
+  case "${_op}" in
+    ">")  _res=$(echo "${_val} > ${_lim}" | bc 2>/dev/null || [ "${_val%.*}" -gt "${_lim%.*}" ] && echo 1 || echo 0) ;;
+    "<")  _res=$(echo "${_val} < ${_lim}" | bc 2>/dev/null || [ "${_val%.*}" -lt "${_lim%.*}" ] && echo 1 || echo 0) ;;
+    "==") _res=$(echo "${_val} == ${_lim}" | bc 2>/dev/null || [ "${_val}" = "${_lim}" ] && echo 1 || echo 0) ;;
+    "!=") _res=$(echo "${_val} != ${_lim}" | bc 2>/dev/null || [ "${_val}" != "${_lim}" ] && echo 1 || echo 0) ;;
+    *) return 1 ;;
+  esac
+
+  if [[ "${_res}" -eq 1 ]]; then
+    printf '%s %s %s\n' "${_val}" "${_op}" "${_lim}"
+  fi
+}
+
+gsc_arithmetic() {
+  # Usage: gsc_arithmetic <val1> <operator> <val2>
+  # Operator: +, -, *, /
+  local _v1="$1"
+  local _op="$2"
+  local _v2="$3"
+
+  # Optimized path
+  local _bin
+  _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_calc"
+  if [[ -x "${_bin}" ]]; then
+    "${_bin}" -op "${_op}" "${_v1}" "${_v2}" 2>/dev/null
+    return $?
+  fi
+
+  # Fallback
+  echo "scale=2; ${_v1} ${_op} ${_v2}" | bc 2>/dev/null || echo "$(( _v1 ${_op} _v2 ))"
+}
+
+# -----------------------------
+# Secure Vault (AES-GCM)
+# -----------------------------
+gsc_vault_encrypt() {
+  # Usage: gsc_vault_encrypt <plaintext>
+  local _bin
+  _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
+  if [[ -x "${_bin}" ]]; then
+    "${_bin}" -op encrypt "$1"
+  else
+    gsc_log_error "gsc_vault binary not found or not executable"
+    return 1
+  fi
+}
+
+gsc_vault_decrypt() {
+  # Usage: gsc_vault_decrypt <ciphertext_hex>
+  local _bin
+  _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
+  if [[ -x "${_bin}" ]]; then
+    "${_bin}" -op decrypt "$1"
+  else
+    gsc_log_error "gsc_vault binary not found or not executable"
+    return 1
+  fi
+}
+
+# -----------------------------
+# Timestamps / Date
+# -----------------------------
+gsc_get_date_format() {
+  # Usage: gsc_get_date_format <epoch_seconds>
+  # Output: e.g. 2024-08-19T20:10:30.781Z
+  local _ts="${1:-$(date +%s)}"
+  date -u -d "@${_ts}" +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "${_ts}" +'%Y-%m-%dT%H:%M:%SZ'
+}
+
 gsc_timestamp() {
   date +%Y-%m-%dT%H:%M:%S%z
 }

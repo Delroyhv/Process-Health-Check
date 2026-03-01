@@ -164,11 +164,7 @@ _sii=0
 # Display a spinner
 #
 spinner() {
-    local -a _spin=("-" "\\" "|" "/")
-    local _num
-    ((_sii++))
-    _num=$((_sii % 4))
-    echo -ne "${_spin[${_num}]} \r" >&2
+    gsc_spinner
 }
 
 ###############################
@@ -183,29 +179,7 @@ spinner() {
 #   A message, if a provided condition is a match, or an empty string if no match.
 #
 compare_value() {
-    local _value=$1
-    local _operator=$2
-    local _limit=$3
-    local _ret=""
-
-    if [[ "${_operator}" == ">" ]]; then
-        if [[ $(echo "${_value} > ${_limit}" | bc) -ne 0 ]]; then
-            _ret="${_value} > ${_limit}"
-        fi
-    elif [[ "${_operator}" == "==" ]]; then
-        if [[ "${_value}" == "${_limit}" ]]; then
-            _ret="${_value} == ${_limit}"
-        fi
-    elif [[ "${_operator}" == "!=" ]]; then
-        if [[ ! "${_value}" == "${_limit}" ]]; then
-            _ret="${_value} == ${_limit}"
-        fi
-    elif [[ "${_operator}" == "<" ]]; then
-        if [[ $(echo "${_value} < ${_limit}" | bc) -ne 0 ]]; then
-            _ret="${_value} < ${_limit}"
-        fi
-    fi
-    echo "$_ret"
+    gsc_compare_value "$1" "$2" "$3"
 }
 
 
@@ -290,7 +264,7 @@ check_value() {
 #    e.g. 2024-08-19T20:10:30.781Z
 #
 get_date_format() {
-    echo "$(date -u -d @$1 +'%Y-%0m-%0dT%H:%M:%SZ')"
+    gsc_get_date_format "$1"
 }
 
 
@@ -882,11 +856,11 @@ while IFS= read -r _line; do
                 fi
 
                 _timestamp=$(echo "${_value_json}" | jq -rc '.[0]')
-                if [[ $(echo "${_timestamp} > ${_timestamp_end}" | bc) -ne 0 ]]; then
+                if [[ -n "$(gsc_compare_value "${_timestamp}" ">" "${_timestamp_end}")" ]]; then
                     _timestamp_end=${_timestamp}
                 fi
 
-                if [[ $(echo "${_timestamp} < ${_timestamp_start}" | bc) -ne 0 ]]; then
+                if [[ -n "$(gsc_compare_value "${_timestamp}" "<" "${_timestamp_start}")" ]]; then
                     _timestamp_start=${_timestamp}
                 fi
 
@@ -970,19 +944,19 @@ while IFS= read -r _line; do
                         continue
                     fi
                     ((_value_count++))
-                    if [[ $(echo "${_value} > ${_value_max}" | bc) -ne 0 ]]; then
+                    if [[ -n "$(gsc_compare_value "${_value}" ">" "${_value_max}")" ]]; then
                         _value_max=${_value}
                     fi
 
-                    if [[ $(echo "${_value} < ${_value_min}" | bc) -ne 0 ]]; then
+                    if [[ -n "$(gsc_compare_value "${_value}" "<" "${_value_min}")" ]]; then
                         _value_min=${_value}
                     fi
 
-                    _sum=$(echo "${_sum} + ${_value}" | bc)
+                    _sum=$(gsc_arithmetic "${_sum}" "+" "${_value}")
                 done
 
                 if (( _value_count > 0 )); then
-                    _value_avg=$(echo "scale=2; ${_sum} / ${#_values[@]}" | bc)
+                    _value_avg=$(gsc_arithmetic "${_sum}" "/" "${#_values[@]}")
 
                     _value_telem_json='['${_timestamp_start}','${_timestamp_end}',"'${_value_avg}'","'${_value_max}'","'${_value_min}'"]'
 

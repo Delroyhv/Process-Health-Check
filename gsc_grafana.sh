@@ -21,6 +21,9 @@ _datasource_url="http://prometheus:9090"
 _grafana_port="3000"
 _update_dashboards=0
 _query_mode=0
+_cleanup_mode=0
+_cleanup_volumes=0
+_override_confirm=""
 _script_name=$(basename "$0")
 _dashboard_dir="dashboards"
 _provisioning_dir="provisioning"
@@ -47,6 +50,9 @@ Additional Options:
     -g, --grafana-port PORT            Specify the Grafana port (default: 3000)
     --update                           Update existing dashboards without clearing the directory
     --query                            Scan for running Prometheus containers and healthcheck.conf to set the datasource
+    --cleanup                          Stop and remove the Grafana container
+    --volume                           Delete dashboards and provisioning directories during cleanup (requires --cleanup)
+    --override=y                       Skip confirmation prompts for cleanup
   
   Example:
     sudo $_script_name --docker -D dashboard1.json dashboards.zip
@@ -123,6 +129,17 @@ Additional Options:
       _datasource_url="http://$_selected_ip:$_selected_port"
       echo "✅ Datasource set to: $_datasource_url"
   }
+
+  # -------------------------------
+  # Helper: Cleanup Grafana
+  # -------------------------------
+  cleanup_grafana() {
+      local _runtime="${_container_engine:-}"
+      if [[ -z "$_runtime" ]]; then
+          if command -v podman >/dev/null 2>&1; then _runtime="podman"; else _runtime="docker"; fi
+      fi
+      gsc_container_cleanup "${_runtime}" "^grafana$" "${_override_confirm}" "${_cleanup_volumes}"
+  }
   
   # -------------------------------
   # Check if running as root
@@ -186,6 +203,12 @@ parse_args() {
                 _update_dashboards=1; shift ;;
             --query)
                 _query_mode=1; shift ;;
+            --cleanup)
+                _cleanup_mode=1; shift ;;
+            --volume)
+                _cleanup_volumes=1; shift ;;
+            --override=y)
+                _override_confirm="y"; shift ;;
             -*|--*) echo "❌ Unknown option: $1"; print_usage ;;
         esac
     done
@@ -320,6 +343,12 @@ launch_grafana() {
 # -------------------------------
 check_root
 parse_args "$@"
+
+if [[ "$_cleanup_mode" -eq 1 ]]; then
+    cleanup_grafana
+    exit 0
+fi
+
 [[ "$_query_mode" -eq 1 ]] && query_prometheus_sources
 download_url
 clone_git_repo

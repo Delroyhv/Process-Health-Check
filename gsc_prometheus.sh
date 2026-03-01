@@ -46,6 +46,9 @@ _estimate_only=0
 _engine=""           # docker|podman|auto
 _replace=0
 _keep_container=0     # if 1, do not use --rm
+_cleanup_mode=0
+_cleanup_volumes=0
+_override_confirm=""
 
 # Prefer fully-qualified image name to avoid podman short-name resolution issues
 _image="docker.io/prom/prometheus:latest"
@@ -85,6 +88,9 @@ Optional:
       --debug                      Enable verbose logging
       -e, --estimate               Enable pre-extract space check
       --estimate-only              Only run estimate (no extract / container)
+      --cleanup                    Stop and remove all managed Prometheus containers
+      --volume                     Delete data directories during cleanup (requires --cleanup)
+      --override=y                 Skip confirmation prompts for cleanup
       --no-space-check             Disable free-space safety check
       --no-color                   Disable ANSI color output
       --version                    Show version
@@ -190,6 +196,12 @@ _detect_engine() {
   gsc_detect_container_runtime
 }
 
+_cleanup() {
+  local _runtime
+  _runtime="$(_detect_engine)"
+  gsc_container_cleanup "${_runtime}" "^gsc_prometheus_" "${_override_confirm}" "${_cleanup_volumes}" "${_base_directory:-}"
+}
+
 _start_prometheus_container() {
   local _port="$1"
   local _data_dir="$2"
@@ -247,6 +259,9 @@ _main() {
       --min-port|--min_port) _min_port="$2"; shift 2 ;;
       --max-port|--max_port) _max_port="$2"; shift 2 ;;
       --exclude-port|--exclude_port) _exclude_ports_cli+=("$2"); shift 2 ;;
+      --cleanup) _cleanup_mode=1; shift 1 ;;
+      --volume) _cleanup_volumes=1; shift 1 ;;
+      --override=y) _override_confirm="y"; shift 1 ;;
       -e|--estimate) _space_check_enabled=1; shift 1 ;;
       --estimate-only|--estimate_only) _space_check_enabled=1; _estimate_only=1; shift 1 ;;
       --no-space-check|--no_space_check) _space_check_enabled=0; _estimate_only=0; shift 1 ;;
@@ -261,6 +276,11 @@ _main() {
 
   _read_config
   _build_extra_excluded_ports
+
+  if [[ "${_cleanup_mode}" -eq 1 ]]; then
+    _cleanup
+    return 0
+  fi
 
   if [[ -z "${_customer}" || -z "${_service_request}" || -z "${_snapshot_file}" || -z "${_base_directory}" ]]; then
     gsc_die "Missing required arguments (customer, service_request, snapshot_file, base_directory)."

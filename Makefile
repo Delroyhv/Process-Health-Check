@@ -1,7 +1,7 @@
 SHELL := /usr/bin/env bash
 
 VERSION := $(shell cat VERSION 2>/dev/null | tr -d '[:space:]')
-# VERSION now contains 'v1.1.x', so BUNDLE_NAME will be 'process_health_v1.1.x'
+# VERSION now contains 'v1.x.x', so BUNDLE_NAME will be 'process_health_v1.x.x'
 BUNDLE_NAME ?= process_health_$(VERSION)
 OUT ?= $(BUNDLE_NAME).tar.xz
 
@@ -13,6 +13,12 @@ readme:
 
 bundle: readme
 	@echo "Creating $(OUT)"
+	@if command -v go >/dev/null 2>&1; then \
+	  echo "Building gsc_calc..."; \
+	  go build -o gsc_calc gsc_calc.go; \
+	  echo "Building gsc_vault..."; \
+	  go build -o gsc_vault gsc_vault.go; \
+	fi
 	@tar -C . --exclude='./.git' --exclude='./.github' --exclude='*.tar.xz' --exclude='*.xz' --exclude='*.sha256' --exclude='./.' --exclude='./2026*' --exclude='./supportLogs*' --exclude='*.log' --exclude='*.log.*' --exclude='._*' -cJf "/tmp/$(OUT)" . && mv "/tmp/$(OUT)" "$(OUT)"
 	@echo "Wrote $(OUT)"
 
