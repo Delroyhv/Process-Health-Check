@@ -224,7 +224,7 @@ Integrity manifest verified by **selfcheck.sh**.
     cd /ci/05304447/2025-11-26_20-48-48
     sudo gsc_prometheus.sh \
         -s 05304447 -c AcmeCorp \
-        -f psnap_2025-Nov-26_20-48-48.tar.xz \
+        -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances
     # [ OK  ] Prometheus for AcmeCorp/05304447 started on port 9092.
     expand_hcpcs_support.sh --healthcheck-only -u -p 9092

@@ -12,7 +12,7 @@ readme:
 
 bundle: readme
 	@echo "Creating $(OUT)"
-	@tar -C . --exclude='./.git' --exclude='./.github' --exclude='*.tar.xz' --exclude='*.xz' --exclude='*.sha256' --exclude='./.claude' --exclude='./2026*' --exclude='./supportLogs*' --exclude='*.log' --exclude='*.log.*' --exclude='._*' -cJf "/tmp/$(OUT)" . && mv "/tmp/$(OUT)" "$(OUT)"
+	@tar -C . --exclude='./.git' --exclude='./.github' --exclude='*.tar.xz' --exclude='*.xz' --exclude='*.sha256' --exclude='./.' --exclude='./2026*' --exclude='./supportLogs*' --exclude='*.log' --exclude='*.log.*' --exclude='._*' -cJf "/tmp/$(OUT)" . && mv "/tmp/$(OUT)" "$(OUT)"
 	@echo "Wrote $(OUT)"
 
 docs:

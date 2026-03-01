@@ -38,17 +38,17 @@ found under the root directory, normalises any *\*Prometheus\*.tar.xz*
 filenames to the *psnap_YYYY-Mon-DD_HH-MM-SS.tar.xz* convention, and
 writes an initial *healthcheck.conf* for each psnap discovered.
 
->     expand_hcpcs_support.sh -r /ci/05304447
+>     expand_hcpcs_support.sh -r /ci/01234567
 
 After this step the directory tree looks similar to:
 
->     /ci/05304447/
->       05304447.supportLogs_2025-11-26_20-48-48_<node>.tar.xz
->       05304447.cluster_triage_2025-11-26_20-48-48.tar.20251126.1320.xz
+>     /ci/01234567/
+>       01234567.supportLogs_2025-11-26_20-48-48_<node>.tar.xz
+>       01234567.cluster_triage_2025-11-26_20-48-48.tar.20251126.1320.xz
 >       2025-11-26_20-48-48/
 >         cluster_triage/
 >         collect_healthcheck_data/
->         psnap_2025-Nov-26_20-48-48.tar.xz
+>         psnap_2026-Jul-04_12-53-12.tar.xz
 >         healthcheck.conf
 
 ## Step 2 — Change into the expanded directory
@@ -57,7 +57,7 @@ Move into the timestamped directory that was just created so that
 **gsc_prometheus.sh** and **runchk.sh** can locate the *psnap* and
 *healthcheck.conf* files by relative path.
 
->     cd /ci/05304447/2025-11-26_20-48-48
+>     cd /ci/01234567/2025-11-26_20-48-48
 
 ## Step 3 — Start the Prometheus container
 
@@ -71,14 +71,14 @@ containers and reserved exporter ports (9093, 9100, 8080, 9115, 9116,
 The selected port is printed at the end of the run:
 
 >     sudo gsc_prometheus.sh \
->         -s 05304447 \
->         -c AcmeCorp \
->         -f psnap_2025-Nov-26_20-48-48.tar.xz \
+>         -s 01234567 \
+>         -c CUSTOMER \
+>         -f psnap_2026-Jul-04_12-53-12.tar.xz \
 >         -b /opt/prom_instances
 
 Sample output (final line):
 
->     [ OK  ] Prometheus for AcmeCorp/05304447 started on port 9092.
+>     [ OK  ] Prometheus for CUSTOMER/01234567 started on port 9092.
 
 Note the port number; it is required for Step 4.
 
@@ -119,27 +119,49 @@ when no container is running.
 >     # Core checks, Prometheus not yet started
 >     runchk.sh --no-metrics
 
+## Step 6 — Partition Growth Analysis
+
+**partition_growth** analyzes partition trends from the JSON event data
+found in the expanded support bundle. It identifies growth spikes and
+provides yearly, quarterly, and weekly summaries.
+
+>     # Locate the splitpartition JSON file
+>     find cluster_triage -iname "*splitpartition.json"
+>
+>     # Run analysis (using the binary for your architecture)
+>     ./partition_growth/build/partition_growth -f <path_to_json> -a
+
+To visualize trends with line graphs (requires **gnuplot-nox**):
+
+>     # Generate ASCII line graphs
+>     gnuplot partition_growth/plot.gp
+
 # COMPLETE WORKED EXAMPLE
 
     # Step 1 — expand the bundle
-    expand_hcpcs_support.sh -r /ci/05304447
+    expand_hcpcs_support.sh -r /ci/01234567
 
     # Step 2 — enter the expanded directory
-    cd /ci/05304447/2025-11-26_20-48-48
+    cd /ci/01234567/2025-11-26_20-48-48
 
     # Step 3 — start Prometheus (note port in final OK line)
     sudo gsc_prometheus.sh \
-        -s 05304447 \
-        -c AcmeCorp \
-        -f psnap_2025-Nov-26_20-48-48.tar.xz \
+        -s 01234567 \
+        -c CUSTOMER \
+        -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances
-    # [ OK  ] Prometheus for AcmeCorp/05304447 started on port 9092.
+    # [ OK  ] Prometheus for CUSTOMER/01234567 started on port 9092.
 
     # Step 4 — patch healthcheck.conf with the port
     expand_hcpcs_support.sh --healthcheck-only -u -p 9092
 
     # Step 5 — run health checks (full detail)
     runchk.sh -f ./healthcheck.conf --full-detail
+
+    # Step 6 — Analyze partition growth
+    PART_JSON=$(find cluster_triage -iname "*splitpartition.json" | head -1)
+    ./partition_growth/build/partition_growth -f "$PART_JSON" -a
+    gnuplot partition_growth/plot.gp
 
 # FILES
 

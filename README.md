@@ -2,7 +2,7 @@
 
 A health check and monitoring toolkit for **HCP Cloud Scale** (Hitachi Vantara) clusters. Processes support logs and Prometheus snapshots to surface errors, warnings, memory anomalies, and partition issues.
 
-**Current version:** 1.1.65
+**Current version:** 1.1.66-v1.1.66
 
 ---
 
@@ -15,6 +15,7 @@ A health check and monitoring toolkit for **HCP Cloud Scale** (Hitachi Vantara) 
 | `awk`, `grep`, `sed`, `find`, `tee` | Core utilities |
 | `docker` or `podman` | Running Prometheus containers |
 | `go` (optional) | Rebuilding the `partition_growth` binary |
+| `gnuplot-nox` | Generating ASCII line graphs |
 
 Run `./selfcheck.sh` to validate all dependencies and required files before use.
 
@@ -34,9 +35,9 @@ Runs `selfcheck.sh` first, then sequentially executes all checks and summarizes 
 
 ```bash
 sudo ./gsc_prometheus.sh \
-  -c TEL \
-  -s 05400896 \
-  -f ./psnap_2026-Jan-05_13-36-41.tar.xz \
+  -c CUSTOMER \
+  -s 01234567 \
+  -f ./psnap_2026-Jul-04_12-53-12.tar.xz \
   -b ./prom \
   --replace
 ```
@@ -54,6 +55,29 @@ sudo ./gsc_prometheus.sh \
 | `--estimate` / `--estimate-only` | Preflight disk space check before extraction |
 
 Prometheus port is auto-selected from the 9090–9200 range.
+
+### Run Grafana with HCP dashboards
+
+```bash
+sudo ./gsc_grafana.sh \
+  --docker \
+  -D ./DashBoards/GrafanaDashboards_2.6.zip \
+  --prometheus-data-source 172.22.20.26:9090
+```
+
+| Flag | Description |
+|------|-------------|
+| `-d`, `--docker` | Use Docker as the container engine |
+| `-p`, `--podman` | Use Podman as the container engine |
+| `-D`, `--dashboard FILE` | Path to dashboard JSON or `.zip` archive |
+| `--url URL` | Download dashboards from a URL |
+| `--git URL` | Clone a Git repository containing dashboards |
+| `-i`, `--prometheus-data-source IP:PORT` | Specify the Prometheus datasource address |
+| `-g`, `--grafana-port PORT` | Specify the Grafana port (default: 3000) |
+| `--update` | Update configuration without clearing existing dashboards |
+| `--query` | Interactive scan for Prometheus sources to set datasource |
+
+Grafana is accessible at `http://localhost:3000` (or your custom port) (admin/admin). Provisioned data sources are set to `editable: true`.
 
 ---
 
@@ -84,6 +108,7 @@ Prometheus metric definitions with query, warning threshold, and error threshold
 | `runchk.sh` | Main orchestrator — runs all checks in sequence |
 | `selfcheck.sh` | Validates dependencies and required files |
 | `gsc_prometheus.sh` | Extracts psnap and runs Prometheus in a container |
+| `gsc_grafana.sh` | Sets up Grafana with provisioned HCP dashboards and datasources |
 | `chk_metrics.sh` | Queries Prometheus against alert definitions |
 | `chk_services_memory.sh` | Validates service RSS memory against `memcheck.conf` bounds |
 | `chk_collected_metrics.sh` | Validates quality of pre-collected metrics |
@@ -96,13 +121,49 @@ Service-specific scripts for HCP software versions 25 and 26 are in `services_sh
 
 ## Partition Growth Analysis
 
-A Go tool for analyzing partition growth trends from JSON event data:
+A Go tool for analyzing partition growth trends from JSON event data. It can summarize growth by year, quarter, or week.
+
+### Usage
 
 ```bash
 ./partition_growth/build/partition_growth-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m) \
   -f data.json \
   -y 2025 \
   -m 1
+```
+
+### Visualizing Trends (Line Graphs)
+
+Using `gnuplot`, you can generate ASCII line graphs for clearer trend visualization:
+
+```bash
+# Example year-to-year trend
+gnuplot partition_growth/plot.gp
+```
+
+**Sample Output:**
+```text
+                             Year-to-Year Partition Growth                      
+     1100 +-----------------------------------------------------------------+   
+          |          +          +          +        **A          +          |   
+     1000 |-+                                   ****   **Partitions ***A***-|   
+      900 |-+                              *****         *                +-|   
+          |                            ****               *                 |   
+      800 |-+                      ****                    **             +-|   
+          |                    *A**                          *              |   
+      700 |-+                **                               *           +-|   
+      600 |-+              **                                  **         +-|   
+          |              **                                      *          |   
+      500 |-+          **                                         **      +-|   
+      400 |-+        **                                             *     +-|   
+          |        **                                                *      |   
+      300 |-+    **                                                   **  +-|   
+          |    **                                                       *   |   
+      200 |-+**                                                          *+-|   
+      100 |**                                                             **|   
+          |          +          +          +          +          +          |   
+        0 +-----------------------------------------------------------------+   
+         2023      2023.5      2024      2024.5      2025      2025.5      2026 
 ```
 
 Pre-compiled binaries for darwin/linux × amd64/arm64 are in `partition_growth/build/`. To rebuild:

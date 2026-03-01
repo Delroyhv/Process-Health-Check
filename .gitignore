@@ -13,7 +13,7 @@ gsc_docker_prometheus.sh
 *.log
 
 # Claude Code local settings
-.claude/settings.local.json
+./settings.local.json
 
 # Go build artifacts (partition_growth/build/ binaries are intentionally tracked)
 partition_growth/*.test
@@ -27,6 +27,6 @@ release/
 processhealth/
 
 # Gemini CLI
-gemini-cli-linux-amd64.tar.gz
-gemini*
+-cli-linux-amd64.tar.gz
+*
 release.sh

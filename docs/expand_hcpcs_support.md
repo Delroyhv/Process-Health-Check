@@ -165,7 +165,7 @@ automatic HCP CS version detection.
 ## Generate a fresh healthcheck.conf for a specific psnap
 
     expand_hcpcs_support.sh --healthcheck-only \
-        -P psnap_2025-Nov-26_20-48-48.tar.xz -p 9092
+        -P psnap_2026-Jul-04_12-53-12.tar.xz -p 9092
 
 ## Update only the port in an existing healthcheck.conf (Step 4 of workflow)
 

@@ -151,14 +151,14 @@ from the next port rather than 9090.
     sudo gsc_prometheus.sh \
         -s 05304447 \
         -c AcmeCorp \
-        -f psnap_2025-Nov-26_20-48-48.tar.xz \
+        -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances
 
 ## Force Podman and a specific port range
 
     sudo gsc_prometheus.sh \
         -s 05304447 -c AcmeCorp \
-        -f psnap_2025-Nov-26_20-48-48.tar.xz \
+        -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances \
         --engine podman --min-port 9150 --max-port 9160
 
@@ -166,14 +166,14 @@ from the next port rather than 9090.
 
     sudo gsc_prometheus.sh \
         -s 05304447 -c AcmeCorp \
-        -f psnap_2025-Nov-26_20-48-48.tar.xz \
+        -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances --estimate-only
 
 ## Replace an existing container for the same SR
 
     sudo gsc_prometheus.sh \
         -s 05304447 -c AcmeCorp \
-        -f psnap_2025-Nov-26_20-48-48.tar.xz \
+        -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances --replace
 
 # SEE ALSO

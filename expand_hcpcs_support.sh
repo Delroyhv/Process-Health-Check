@@ -102,10 +102,10 @@ Examples:
     ${_script_name} -r /ci/05304447 --no-healthcheck
 
   Healthcheck-only for a single psnap, overriding port:
-    ${_script_name} --healthcheck-only -P psnap_2025-Oct-10_13-24-12.tar.xz -p 9091
+    ${_script_name} --healthcheck-only -P psnap_2026-Jul-04_12-53-12.tar.xz -p 9091
 
   Healthcheck-only and update existing healthcheck.conf in-place for a psnap:
-    ${_script_name} --healthcheck-only -P psnap_2025-Oct-10_13-24-12.tar.xz -u -p 9091
+    ${_script_name} --healthcheck-only -P psnap_2026-Jul-04_12-53-12.tar.xz -u -p 9091
 
   Healthcheck-only update of an existing healthcheck.conf (no psnap):
     ${_script_name} --healthcheck-only -u -p 9098 -s prom.example.com -f /path/to/healthcheck.conf
@@ -248,7 +248,7 @@ _update_cs_version_from_setup() {
 # Support Logs
 ###############################################################################
 _find_support_logs_files() {
-    find "${_root_dir}" -type f -name 'supportLogs_*.tar*.xz' 2>/dev/null | sort
+    find "${_root_dir}" -type f -name '*supportLogs_*.tar*.xz' 2>/dev/null | sort
 }
 
 _extract_support_log() {
@@ -259,7 +259,7 @@ _extract_support_log() {
     _base="$(basename -- "${_file}")"
     _ts=""
 
-    if [[ "${_base}" =~ ^supportLogs_([0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2})_ ]]; then
+    if [[ "${_base}" =~ supportLogs_([0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2})_ ]]; then
         _ts="${BASH_REMATCH[1]}"
         _target_dir="${_dir}/${_ts}"
     else
