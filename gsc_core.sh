@@ -204,6 +204,12 @@ gsc_container_cleanup() {
     "${_runtime}" stop "${_name}" >/dev/null 2>&1 || true
     "${_runtime}" rm -f "${_name}" >/dev/null 2>&1 || true
 
+    # Clear port in healthcheck.conf if it exists in current dir
+    if [[ "${_name}" =~ ^gsc_prometheus_ && -f "./healthcheck.conf" ]]; then
+      sed -i 's/_prom_port="[0-9]*"/_prom_port=""/' "./healthcheck.conf" 2>/dev/null || true
+      gsc_log_info "Cleared _prom_port in ./healthcheck.conf (port is now free)."
+    fi
+
     if [[ "${_volumes}" -eq 1 ]]; then
       local _target=""
       if [[ "${_name}" =~ ^gsc_prometheus_ ]]; then
@@ -660,6 +666,19 @@ gsc_json_escape() {
   printf '"%s"' "$(printf '%s' "${_text}" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
 
+gsc_sanitize_name() {
+  # Usage: gsc_sanitize_name <string>
+  # Returns a string safe for Docker/Podman container names: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+  local _s="$1"
+  # Replace invalid chars with underscores
+  _s=$(printf '%s' "${_s}" | sed 's/[^a-zA-Z0-9_.-]/_/g')
+  # Ensure it starts with alphanumeric
+  if [[ ! "${_s}" =~ ^[a-zA-Z0-9] ]]; then
+    _s="gsc_${_s}"
+  fi
+  printf '%s\n' "${_s}"
+}
+
 # -----------------------------
 # Container port helpers
 # -----------------------------
@@ -678,22 +697,22 @@ gsc_collect_container_ports() {
 
   for _runtime in podman docker; do
     if command -v "${_runtime}" >/dev/null 2>&1; then
-      local _tmp
-      _tmp="$(mktemp 2>/dev/null || printf '/tmp/gsc_%s_ports.%s' "${_runtime}" "$$")"
-      "${_runtime}" ps --format '{{.Ports}}' 2>/dev/null > "${_tmp}" || true
-      while IFS= read -r _line; do
-        for _tok in ${_line}; do
-          case "${_tok}" in
-            *:*/*)
-              _hp="${_tok%%->*}"; _hp="${_hp##*:}"
-              if [[ "${_hp}" =~ ^[0-9]+$ ]]; then
-                _gsc_excluded_ports+=("${_hp}")
-              fi
-              ;;
-          esac
+      # Use a more reliable way to extract host ports from the runtime
+      # format '{{.Ports}}' returns strings like: 0.0.0.0:9090->9090/tcp, :::9091->9091/tcp
+      while read -r _line; do
+        [[ -z "${_line}" ]] && continue
+        # Replace commas with spaces to iterate through multiple mappings
+        local _mappings="${_line//,/ }"
+        for _tok in ${_mappings}; do
+          if [[ "${_tok}" == *"->"* ]]; then
+            _hp="${_tok%%->*}"   # Get part before arrow: e.g. 0.0.0.0:9090 or :::9091
+            _hp="${_hp##*:}"     # Get part after last colon: e.g. 9090 or 9091
+            if [[ "${_hp}" =~ ^[0-9]+$ ]]; then
+              _gsc_excluded_ports+=("${_hp}")
+            fi
+          fi
         done
-      done < "${_tmp}"
-      rm -f "${_tmp}"
+      done < <("${_runtime}" ps --format '{{.Ports}}' 2>/dev/null || true)
     fi
   done
 

@@ -248,7 +248,7 @@ _update_cs_version_from_setup() {
 # Support Logs
 ###############################################################################
 _find_support_logs_files() {
-    find "${_root_dir}" -type f -name '*supportLogs_*.tar*.xz' 2>/dev/null | sort
+    find "${_root_dir}" -type f -name '*supportLogs_*.tar*.xz' ! -name 'log_*' ! -name '*diag*' 2>/dev/null | sort
 }
 
 _extract_support_log() {
@@ -351,7 +351,7 @@ _process_support_logs() {
 # psnap handling (no unpack)
 ###############################################################################
 _find_prometheus_snapshot_files() {
-    find "${_root_dir}" -type f -name '*Prometheus*.tar.xz' 2>/dev/null | sort
+    find "${_root_dir}" -type f -name '*Prometheus*.tar.xz' ! -name 'log_*' ! -name '*diag*' 2>/dev/null | sort
 }
 
 _extract_date_from_prometheus_name() {
@@ -407,7 +407,7 @@ _rename_all_prometheus_snapshots() {
 }
 
 _find_psnap_files() {
-    find "${_root_dir}" -type f -name 'psnap*.tar.xz' 2>/dev/null | sort
+    find "${_root_dir}" -type f -name 'psnap*.tar.xz' ! -name 'log_*' ! -name '*diag*' 2>/dev/null | sort
 }
 
 ###############################################################################

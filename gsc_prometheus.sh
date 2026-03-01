@@ -49,6 +49,7 @@ _keep_container=0     # if 1, do not use --rm
 _cleanup_mode=0
 _cleanup_volumes=0
 _override_confirm=""
+_use_flock=1
 
 # Prefer fully-qualified image name to avoid podman short-name resolution issues
 _image="docker.io/prom/prometheus:latest"
@@ -157,24 +158,39 @@ _init_excluded_ports() {
 }
 
 _choose_free_port() {
+  local _max_attempts=100
+  local _attempt=0
+  local _candidate
+
   if [[ -f "${_last_used_port_file}" ]]; then
     _last_used_port="$(<"${_last_used_port_file}")"
   fi
 
-  [[ "${_last_used_port}" =~ ^[0-9]+$ ]] || _last_used_port="${_min_port}"
-  ((_last_used_port < _min_port)) && _last_used_port="${_min_port}"
+  # Seed random with last used port + PID for better distribution
+  RANDOM=$(( (_last_used_port:-9090) + $$ ))
 
-  while ((_last_used_port <= _max_port)); do
-    if ! gsc_port_in_use "${_last_used_port}"; then
-      [[ "${_gsc_debug}" -eq 1 ]] && gsc_log_info "Selected free port: ${_last_used_port}"
-      echo "${_last_used_port}"
+  while ((_attempt < _max_attempts)); do
+    # Range: 9090 to 9599
+    _candidate=$(( RANDOM % 510 + 9090 ))
+    
+    if ! gsc_port_in_use "${_candidate}"; then
+      [[ "${_gsc_debug}" -eq 1 ]] && gsc_log_info "Selected random free port: ${_candidate}"
+      echo "${_candidate}"
       return 0
     fi
-    [[ "${_gsc_debug}" -eq 1 ]] && gsc_log_info "Port ${_last_used_port} in use, trying next..."
-    _last_used_port=$((_last_used_port + 1))
+    ((_attempt++))
   done
 
-  gsc_die "No free ports available in range ${_min_port}-${_max_port}"
+  # Fallback to sequential scan if random fails too many times
+  local _p
+  for (( _p=9090; _p<=9599; _p++ )); do
+    if ! gsc_port_in_use "${_p}"; then
+      echo "${_p}"
+      return 0
+    fi
+  done
+
+  gsc_die "No free ports available in range 9090-9599 after random and sequential attempts."
 }
 
 _save_last_used_port() {
@@ -262,6 +278,7 @@ _main() {
       --cleanup) _cleanup_mode=1; shift 1 ;;
       --volume) _cleanup_volumes=1; shift 1 ;;
       --override=y) _override_confirm="y"; shift 1 ;;
+      --no-flock) _use_flock=0; shift 1 ;;
       -e|--estimate) _space_check_enabled=1; shift 1 ;;
       --estimate-only|--estimate_only) _space_check_enabled=1; _estimate_only=1; shift 1 ;;
       --no-space-check|--no_space_check) _space_check_enabled=0; _estimate_only=0; shift 1 ;;
@@ -299,16 +316,16 @@ _main() {
 
   mkdir -p "${_log_dir}"
 
+  # Sanitize names for container safety
+  _customer=$(gsc_sanitize_name "${_customer}")
+  _service_request=$(gsc_sanitize_name "${_service_request}")
+
   local _customer_dir="${_base_directory}/${_customer}/${_service_request}"
   local _data_dir="${_customer_dir}/prom/data"
   local _prom_dir="${_customer_dir}/prom"
   mkdir -p "${_data_dir}" "${_prom_dir}"
 
   _init_excluded_ports
-
-  local _port
-  _port="$(_choose_free_port)"
-  _last_used_port="${_port}"
 
   gsc_log_info "Extracting snapshot '${_snapshot_file}' into ${_data_dir}"
 
@@ -340,8 +357,36 @@ EOPROM
   chmod -R 0777 "${_data_dir}" || true
   chown -R 65534:65534 "${_data_dir}" 2>/dev/null || true
 
-  _start_prometheus_container "${_port}" "${_data_dir}" "${_prom_dir}"
-  _save_last_used_port
+  local _lock_file="/tmp/gsc_prometheus_port.lock"
+  local _selected_port=""
+  
+  if [[ "${_use_flock}" -eq 1 ]]; then
+    # Protect port selection and container start with a file lock to avoid race conditions
+    (
+      flock -x 200
+
+      local _port
+      _port="$(_choose_free_port)"
+      _last_used_port="${_port}"
+
+      _start_prometheus_container "${_port}" "${_data_dir}" "${_prom_dir}"
+      _save_last_used_port
+
+      # Export port for the outer scope
+      echo "${_port}" > "${_data_dir}/.selected_port"
+    ) 200>"${_lock_file}"
+    _selected_port=$(<"${_data_dir}/.selected_port")
+  else
+    # NO FLOCK: High risk of collision in simultaneous runs
+    local _port
+    _port="$(_choose_free_port)"
+    _last_used_port="${_port}"
+    _start_prometheus_container "${_port}" "${_data_dir}" "${_prom_dir}"
+    _save_last_used_port
+    _selected_port="${_port}"
+  fi
+
+  local _port="${_selected_port}"
 
   # Auto-patch healthcheck.conf that lives alongside the snapshot file
   local _hc_conf
