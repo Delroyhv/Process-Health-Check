@@ -1,3 +1,14 @@
+## v1.2.01
+- **Optimization:** Implemented randomized port selection (9090-9599) to minimize lock contention.
+- **Concurrency:** Integrated `flock` for atomic port allocation and container startup.
+- **Security:** Added robust name sanitization for all container-related inputs.
+- **Improved I/O:** Snapshot extraction moved outside the critical lock section for better performance.
+
+### SHA256
+```
+876fc08c69cac4d3872540be599e7f7a8e0e454d5f46e38fdbc5a06c5cf5b77d  process_health_v1.2.01.tar.xz
+```
+
 ## v1.2.00
 - **Major Update:** Integrated Go-based secure vault (`gsc_vault`) for AES-GCM credential encryption.
 - **Performance:** Optimized arithmetic and comparison logic using compiled Go utility (`gsc_calc`), replacing slow `bc` calls.
