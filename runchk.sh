@@ -134,8 +134,9 @@ if [[ "${_max_partitions}" -gt 1500 ]]; then
             "${_pg_bin}" -f "${_part_json}" -a > partition_growth_chart.log 2>/dev/null || true
             gnuplot "${_pg_plot}" >> partition_growth_chart.log 2>/dev/null || true
             if [[ -s partition_growth_chart.log ]]; then
-                gsc_log_info "Partition growth chart generated: partition_growth_chart.log"
-                cat partition_growth_chart.log
+                gsc_log_info "Partition growth charts generated: partition_growth_chart.log"
+                # Only print the Quarterly chart to screen
+                sed -n '/Quarterly Partition Growth/,/Weekly Growth/ { /Weekly Growth/!p }' partition_growth_chart.log
             fi
         else
             gsc_log_warn "gnuplot not found; skipping partition growth chart generation."
