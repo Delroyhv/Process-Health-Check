@@ -167,7 +167,8 @@ _choose_free_port() {
   fi
 
   # Seed random with last used port + PID for better distribution
-  RANDOM=$(( (_last_used_port:-9090) + $$ ))
+  _last_used_port=${_last_used_port:-9090}
+  RANDOM=$(( _last_used_port + $$ ))
 
   while ((_attempt < _max_attempts)); do
     # Range: 9090 to 9599
