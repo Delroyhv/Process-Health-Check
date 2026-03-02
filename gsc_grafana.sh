@@ -19,6 +19,7 @@ _url=""
 _git_repo=""
 _datasource_url="http://prometheus:9090"
 _grafana_port="3000"
+_admin_password="admin"
 _update_dashboards=0
 _query_mode=0
 _cleanup_mode=0
@@ -47,20 +48,21 @@ Core Options:
 Additional Options:
   -i, --input IP:PORT,
   --prometheus-data-source IP:PORT   Specify the Prometheus datasource IP and port (e.g., 172.22.20.26:9090)
-    -g, --grafana-port PORT            Specify the Grafana port (default: 3000)
-    --update                           Update existing dashboards without clearing the directory
-    --query                            Scan for running Prometheus containers and healthcheck.conf to set the datasource
-    --cleanup                          Stop and remove the Grafana container
-    --volume                           Delete dashboards and provisioning directories during cleanup (requires --cleanup)
-    --override=y                       Skip confirmation prompts for cleanup
+  -g, --grafana-port PORT            Specify the Grafana port (default: 3000)
+  --admin-password PASSWORD          Specify the Grafana admin password (default: admin)
+  --update                           Update existing dashboards without clearing the directory
+  --query                            Scan for running Prometheus containers and healthcheck.conf to set the datasource
+  --cleanup                          Stop and remove the Grafana container
+  --volume                           Delete dashboards and provisioning directories during cleanup (requires --cleanup)
+  --override=y                       Skip confirmation prompts for cleanup
   
   Example:
     sudo $_script_name --docker -D dashboard1.json dashboards.zip
     sudo $_script_name --podman --prometheus-data-source 172.22.20.26:9090 --grafana-port 3001 --update
     sudo $_script_name --podman --query
-  EOF
-      exit 1
-  }
+EOF
+    exit 1
+}
   
   # -------------------------------
   # Helper: Query Prometheus Sources
@@ -199,6 +201,9 @@ parse_args() {
             -g|--grafana-port)
                 shift
                 _grafana_port="$1"; shift ;;
+            --admin-password)
+                shift
+                _admin_password="$1"; shift ;;
             --update)
                 _update_dashboards=1; shift ;;
             --query)
@@ -298,7 +303,7 @@ services:
       - ./provisioning/datasources:/etc/grafana/provisioning/datasources
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=$_admin_password
 EOF
 }
 
@@ -324,7 +329,7 @@ launch_grafana() {
             -v "$(pwd)/provisioning/dashboards:/etc/grafana/provisioning/dashboards:Z" \
             -v "$(pwd)/provisioning/datasources:/etc/grafana/provisioning/datasources:Z" \
             -e GF_SECURITY_ADMIN_USER=admin \
-            -e GF_SECURITY_ADMIN_PASSWORD=admin \
+            -e GF_SECURITY_ADMIN_PASSWORD=$_admin_password \
             grafana/grafana:latest 2>>"$_error_log"
         sleep 5
         if ! podman ps | grep -q grafana; then

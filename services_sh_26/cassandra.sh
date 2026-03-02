@@ -61,6 +61,8 @@ s|JMX_PORT=\"7199\"|JMX_PORT=\"$PORT_DEF_PRIMARY_SERVICE_PORT\"|;\
 s|JVM_OPTS=\"\$JVM_OPTS -ea\"|#JVM_OPTS=\"\$JVM_OPTS -ea\"|;\
 s|JVM_OPTS=\"\$JVM_OPTS -Xloggc|#JVM_OPTS=\"\$JVM_OPTS -Xloggc|;"
 
+_cassandra_pass="${GSC_CASSANDRA_PASS:-ensemble}"
+
 if [[ $JMX_SSL_ENABLED == true ]]; then
     CASSANDRA_ENV_SED_OPTIONS=$CASSANDRA_ENV_SED_OPTIONS"\
 s|JVM_OPTS=\"\$JVM_OPTS -Dcom.sun.management.jmxremote.ssl=false\"|JVM_OPTS=\"\$JVM_OPTS -Dcom.sun.management.jmxremote.ssl=true\"|;\
@@ -68,15 +70,15 @@ s|#  JVM_OPTS=\"\$JVM_OPTS -Dcom.sun.management.jmxremote.ssl.need.client.auth=t
 s|JVM_OPTS=\"\$JVM_OPTS -Dcom.sun.management.jmxremote.password.file=/etc/cassandra/jmxremote.password\"|JVM_OPTS=\"\$JVM_OPTS -Dcom.sun.management.jmxremote.password.file=$JMX_PASS_FILE -Dcom.sun.management.jmxremote.access.file=$JMX_ACCESS_FILE\"|;\
 s|#  JVM_OPTS=\"\$JVM_OPTS -Dcom.sun.management.jmxremote.registry.ssl=true\"|  JVM_OPTS=\"\$JVM_OPTS -Dcom.sun.management.jmxremote.registry.ssl=true\"|;\
 s|#  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.keyStore=/path/to/keystore\"|  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.keyStore=$SERVICE_TOOLS_LIB/foundryJmxKeyStore.jks\"|;\
-s|#  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.keyStorePassword=<keystore-password>\"|  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.keyStorePassword=ensemble\"|;\
+s|#  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.keyStorePassword=<keystore-password>\"|  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.keyStorePassword=$_cassandra_pass\"|;\
 s|#  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.trustStore=/path/to/truststore\"|  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.trustStore=$SERVICE_TOOLS_LIB/foundryJmxTrustStore.jks\"|;\
-s|#  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.trustStorePassword=<truststore-password>\"|  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.trustStorePassword=ensemble\"|;"
+s|#  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.trustStorePassword=<truststore-password>\"|  JVM_OPTS=\"\$JVM_OPTS -Djavax.net.ssl.trustStorePassword=$_cassandra_pass\"|;"
 fi
 
 cp $CASSANDRA_ENV $CASSANDRA_ENV_TMP
 apply_sed "$CASSANDRA_ENV_TMP" "$CASSANDRA_ENV" "$CASSANDRA_ENV_SED_OPTIONS"
 
-grep cassandra $JMX_PASS_FILE || echo "cassandra ensemble" >> $JMX_PASS_FILE
+grep cassandra $JMX_PASS_FILE || echo "cassandra $_cassandra_pass" >> $JMX_PASS_FILE
 chmod 400 $JMX_PASS_FILE
 
 grep cassandra $JMX_ACCESS_FILE || echo "cassandra readwrite" >> $JMX_ACCESS_FILE
@@ -97,8 +99,8 @@ echo "-Dcom.sun.management.jmxremote.ssl=true
 -Dcom.sun.management.jmxremote.ssl.need.client.auth=true
 -Dcom.sun.management.jmxremote.registry.ssl=true
 -Djavax.net.ssl.keyStore=/opt/service/tools/lib/foundryJmxKeyStore.jks
--Djavax.net.ssl.keyStorePassword=ensemble
+-Djavax.net.ssl.keyStorePassword=$_cassandra_pass
 -Djavax.net.ssl.trustStore=/opt/service/tools/lib/foundryJmxTrustStore.jks
--Djavax.net.ssl.trustStorePassword=ensemble" > /root/.cassandra/nodetool-ssl.properties
+-Djavax.net.ssl.trustStorePassword=$_cassandra_pass" > /root/.cassandra/nodetool-ssl.properties
 
 exec /opt/cassandra/bin/cassandra -f -Dcassandra.config=file://$CASSANDRA_YAML -Dlogback.configurationFile=$CASSANDRA_CONFIG/logback.xml -Dcassandra.logdir=$SERVICE_LOG_DIR -Dcassandra.storagedir=$SERVICE_DATA_DIR/data/ -Djava.rmi.server.hostname=${BROADCAST_ADDRESS}
