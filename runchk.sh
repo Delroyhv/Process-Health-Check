@@ -116,6 +116,35 @@ gsc_log_info "# RUN chk_partInfo.sh"
 gsc_log_info "# RUN get_partition_details.sh"
 "${_script_dir}/get_partition_details.sh" . | tee health_report_partition_details.log
 
+# ── Partition Growth Chart (conditional) ─────────────────────────────────────
+_max_partitions=$(grep -E "^[[:space:]]*[0-9]+ [0-9.]+" health_report_partition_details.log | awk '{print $1}' | sort -rn | head -n 1 || echo 0)
+if [[ "${_max_partitions}" -gt 1500 ]]; then
+    gsc_log_info "High partition count detected (${_max_partitions}). Generating growth chart..."
+    _part_json="supportLogs/partitionMap.json"
+    # Fallback if supportLogs/ is not in CWD
+    [[ ! -f "${_part_json}" ]] && _part_json=$(find . -name partitionMap.json -print -quit 2>/dev/null || echo "")
+    
+    _pg_bin="${_script_dir}/partition_growth/build/partition_growth-linux-amd64"
+    _pg_plot="${_script_dir}/partition_growth/plot.gp"
+
+    if [[ -n "${_part_json}" && -f "${_part_json}" && -x "${_pg_bin}" && -f "${_pg_plot}" ]]; then
+        if command -v gnuplot >/dev/null 2>&1; then
+            # Run from script dir to ensure plot.gp can find its data if it uses relative paths
+            # but output to CWD
+            "${_pg_bin}" -f "${_part_json}" -a > partition_growth_chart.log 2>/dev/null || true
+            gnuplot "${_pg_plot}" >> partition_growth_chart.log 2>/dev/null || true
+            if [[ -s partition_growth_chart.log ]]; then
+                gsc_log_info "Partition growth chart generated: partition_growth_chart.log"
+                cat partition_growth_chart.log
+            fi
+        else
+            gsc_log_warn "gnuplot not found; skipping partition growth chart generation."
+        fi
+    else
+        gsc_log_warn "Missing partition_growth artifacts or JSON; skipping chart generation."
+    fi
+fi
+
 gsc_log_info "# RUN chk_buckets.sh"
 "${_script_dir}/chk_buckets.sh" --bucket-owner
 if [[ -f health_report_buckets.log ]]; then
