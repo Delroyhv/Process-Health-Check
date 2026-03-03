@@ -49,7 +49,7 @@ _keep_container=0     # if 1, do not use --rm
 _cleanup_mode=0
 _cleanup_volumes=0
 _override_confirm=""
-_use_flock=1
+_use_flock=0
 
 # Prefer fully-qualified image name to avoid podman short-name resolution issues
 _image="docker.io/prom/prometheus:latest"
@@ -79,6 +79,7 @@ Required (via CLI or config file):
 
 Optional:
   -C, --config-file PATH           Config file (key=value)
+      --concurrent                 Enable file locking for concurrent port selection (120s timeout)
       --engine auto|docker|podman  Container engine (default: auto)
       --image IMAGE                Prometheus image (default: ${_image})
       --replace                    Replace existing container with same name
@@ -279,7 +280,7 @@ _main() {
       --cleanup) _cleanup_mode=1; shift 1 ;;
       --volume) _cleanup_volumes=1; shift 1 ;;
       --override=y) _override_confirm="y"; shift 1 ;;
-      --no-flock) _use_flock=0; shift 1 ;;
+      --concurrent) _use_flock=1; shift 1 ;;
       -e|--estimate) _space_check_enabled=1; shift 1 ;;
       --estimate-only|--estimate_only) _space_check_enabled=1; _estimate_only=1; shift 1 ;;
       --no-space-check|--no_space_check) _space_check_enabled=0; _estimate_only=0; shift 1 ;;
@@ -364,9 +365,9 @@ EOPROM
   
   if [[ "${_use_flock}" -eq 1 ]]; then
     # Protect port selection and container start with a file lock to avoid race conditions
-    # Timeout after 60 seconds to avoid indefinite hang
+    # Timeout after 120 seconds to avoid indefinite hang
     (
-      flock -w 60 -x 200 || gsc_die "Timeout waiting for port selection lock"
+      flock -w 120 -x 200 || gsc_die "Timeout waiting for port selection lock"
 
       local _port
       _port="$(_choose_free_port)"
