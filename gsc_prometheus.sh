@@ -364,8 +364,9 @@ EOPROM
   
   if [[ "${_use_flock}" -eq 1 ]]; then
     # Protect port selection and container start with a file lock to avoid race conditions
+    # Timeout after 60 seconds to avoid indefinite hang
     (
-      flock -x 200
+      flock -w 60 -x 200 || gsc_die "Timeout waiting for port selection lock"
 
       local _port
       _port="$(_choose_free_port)"
