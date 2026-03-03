@@ -88,6 +88,11 @@ gsc_log_ok()        { gsc_log OK "$*" ;}
 gsc_log_success()   { gsc_log OK "$*" ;}
 gsc_log_debug()     { if [[ "${_debug:-0}" == "1" || "${_debug:-0}" == "2" ]]; then gsc_log INFO "[DEBUG] $*"; fi; return 0; }
 
+gsc_die() {
+  gsc_log_error "$*"
+  exit 1
+}
+
 # For logging into a specific file (not stdout/stderr)
 gsc_loga() {
   if [[ -n "${_output_file:-}" ]]; then
