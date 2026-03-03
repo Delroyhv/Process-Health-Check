@@ -468,7 +468,7 @@ getOldestMetricTimestamp() {
     fi
 
     if [[ "${_err}" == "0" ]]; then
-        _oldest_date=$(get_date_format "${_oldest_date_epoch}")
+        _oldest_date="${_oldest_date_epoch}"
     fi
 
     echo "${_oldest_date}"
@@ -495,7 +495,7 @@ make_query() {
     local -a _mycmd
 
     ### Convert query to URL encoding
-    _urlenc_metric=$(echo "$_metric" | jq -sRr @uri)
+    _urlenc_metric=$(echo "$_metric" | jq -Rr @uri)
 
     if [[ "${_pdate_arg}" != "" ]]; then
         _urlenc_metric+="&time=${_pdate_arg}"
@@ -503,9 +503,7 @@ make_query() {
 
     ### Form the query command (curl)
     _mycmd=(curl -s -k -X GET "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query?query=${_urlenc_metric}")
-    if [[ "${_debug}" == "2" ]]; then
-        echo "mycmd=${_mycmd[*]}" >&2
-    fi
+    gsc_log_debug "Query command: ${_mycmd[*]}"
 
     ### Run the query command on Prometheus:
     _result=$("${_mycmd[@]}")
@@ -536,7 +534,7 @@ make_query_range() {
     local -a _mycmd
 
     ### Convert query to URL encoding
-    _urlenc_metric=$(echo "$_metric" | jq -sRr @uri)
+    _urlenc_metric=$(echo "$_metric" | jq -Rr @uri)
 
     if [[ "${_start}" == "" || "${_end}" == "" || "${_step}" == "" ]]; then
         echo "INTERNAL ERROR: MISSING INPUT PARAMETERS FOR QUERY_RANGE ENDPOINT (&start=${_start}&end=${_end}&step=${_step})" >&2
@@ -547,10 +545,7 @@ make_query_range() {
 
     ### Form the query command (curl)
     _mycmd=(curl -s -k -X GET "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query_range?query=${_urlenc_metric}")
-
-    if [[ "${_debug}" == "2" ]]; then
-        echo "mycmd=${_mycmd[*]}" >&2
-    fi
+    gsc_log_debug "Query Range command: ${_mycmd[*]}"
 
     ### Run the query command on Prometheus:
     _result=$("${_mycmd[@]}")
@@ -725,7 +720,7 @@ elif [[ "${_forced_proto}" == "false" && ("$(gsc_is_empty "${_oldest_date}")" ==
         gsc_log_info "Auto-switching protocol to ${_prom_proto} - collecting from ${_prom_proto}://${_prom_name}:${_prom_port}"
     fi
 else
-    gsc_log_info "Oldest metric timestamp: ${_oldest_date}"
+    gsc_log_info "Oldest metric timestamp: $(get_date_format "${_oldest_date}")"
 fi
 
 # Use a specified metrics json file, unless -w is specified for testing from an internal variable
@@ -748,24 +743,37 @@ _msg_count=0          # total useful messages
 # Number of metrics:
 _num_metrics=$(echo "${_metric_queries}" | jq length)
 gsc_log_info "Starting query metrics: ${_num_metrics} queries"
+gsc_log_debug "METRIC QUERIES: ${_metric_queries}"
 
-while IFS= read -r _line; do
+_tmp_queries=$(mktemp)
+gsc_add_tmp_dir "$(dirname "${_tmp_queries}")"
+gsc_log_debug "Populating _tmp_queries: ${_tmp_queries}"
+echo "${_metric_queries}" | jq -rc '.[]' > "${_tmp_queries}"
+gsc_log_debug "Query file content: $(cat "${_tmp_queries}")"
+
+while IFS='' read -r _line; do
+    gsc_log_debug "ENTERING LOOP with _line: ${_line}"
+    [[ -z "${_line}" ]] && continue
 
     ### Increment the count of metrics/queries
     ((_num_queries++))
+    
+    gsc_log_debug "Loop iter ${_num_queries}: ${_line}"
 
     gsc_log_debug "============================"
 
-    _event_id=$(echo "$_line" | jq -c '.EventID' | tr -d '"')
-    _description=$(echo "$_line" | jq -c '.Description' | tr -d '"')
-    _metric_query=$(echo "$_line" | jq -c '.Query' | tr -d '"')
-    _warning_criteria=$(echo "$_line" | jq -c '.Warning' | tr -d '"')
-    _error_criteria=$(echo "$_line" | jq -c '.Error' | tr -d '"')
-    _ignore_criteria=$(echo "$_line" | jq -c '.Ignore' | tr -d '"')
-    _label=$(echo "$_line" | jq -c '.Label' | tr -d '"')
-    _exclude_label=$(echo "$_line" | jq -c '.Exclude' | tr -d '"')
-    _consecutive_probes=$(echo "$_line" | jq -c '.ConsecutiveProbes' | tr -d '"')
-    _step=$(echo "$_line" | jq -c '.Step' | tr -d '"')
+    _event_id=$(echo "$_line" | jq -rc '.EventID // ""')
+    gsc_log_debug "Extracted _event_id: ${_event_id}"
+    _description=$(echo "$_line" | jq -rc '.Description // ""')
+    _metric_query=$(echo "$_line" | jq -rc '.Query // ""')
+    _warning_criteria=$(echo "$_line" | jq -rc '.Warning // ""')
+    _error_criteria=$(echo "$_line" | jq -rc '.Error // ""')
+    _ignore_criteria=$(echo "$_line" | jq -rc '.Ignore // ""')
+    _label=$(echo "$_line" | jq -rc '.Label // ""')
+    _exclude_label=$(echo "$_line" | jq -rc '.Exclude // ""')
+    _consecutive_probes=$(echo "$_line" | jq -rc '.ConsecutiveProbes // ""')
+    _step=$(echo "$_line" | jq -rc '.Step // ""')
+    gsc_log_debug "Extracted all variables for ${_event_id}"
 
     # if query contains %PROBESTEP variable - replace it with a specified ${_probes_interval} in seconds
     if [[ "$(echo "${_metric_query}" | grep "%PROBESTEP")" != "" ]]; then
@@ -983,7 +991,8 @@ while IFS= read -r _line; do
         gsc_loga "INTERNAL-ERROR: FAILED QUERY: ${_description}: ${_metric_query}, REPLY: ${_metric_result}"
     fi
 
-done < <(echo "${_metric_queries}" | jq -rc '.[] ')
+done < "${_tmp_queries}"
+rm -f "${_tmp_queries}"
 
 #################
 # Final printouts

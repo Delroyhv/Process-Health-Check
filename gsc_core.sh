@@ -90,7 +90,11 @@ gsc_log_debug()     { if [[ "${_debug:-0}" == "1" || "${_debug:-0}" == "2" ]]; t
 
 # For logging into a specific file (not stdout/stderr)
 gsc_loga() {
-  printf '%s\n' "$*" >> "${_output_file}"
+  if [[ -n "${_output_file:-}" ]]; then
+    printf '%s\n' "$*" >> "${_output_file}"
+  else
+    printf '%s\n' "$*"
+  fi
 }
 
 # -----------------------------
