@@ -20,6 +20,7 @@ _config_file="healthcheck.conf"
 _full_detail=0   # --full-detail : run chk_disk_perf, chk_filesystem, chk_messages
 _no_metrics=0    # --no-metrics  : skip chk_metrics.sh
 _report_file=""  # --report : generate markdown report
+_partition_details_log="health_report_partition_details.log" # Used for report generation
 
 # ── Usage ────────────────────────────────────────────────────────────────────
 usage() {
