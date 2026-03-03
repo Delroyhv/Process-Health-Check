@@ -355,6 +355,7 @@ scrape_configs:
       - targets: ['localhost:9090']
 EOPROM
 
+  gsc_log_info "Setting data directory permissions (may take a moment)..."
   chmod -R 0777 "${_data_dir}" || true
   chown -R 65534:65534 "${_data_dir}" 2>/dev/null || true
 
