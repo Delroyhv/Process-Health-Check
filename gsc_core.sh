@@ -118,11 +118,18 @@ gsc_mktempdir() {
   local _d
   _d="$(mktemp -d 2>/dev/null || true)"
   if [[ -z "${_d}" ]]; then
-  _d="/tmp/gsc.$$.${RANDOM}"
-  mkdir -p "${_d}" || gsc_die "Unable to create temp dir: ${_d}"
+    _d="/tmp/gsc.$$.${RANDOM}"
+    mkdir -p "${_d}" || gsc_die "Unable to create temp dir: ${_d}"
   fi
   _gsc_tmp_dirs+=("${_d}")
   printf '%s\n' "${_d}"
+}
+
+gsc_add_tmp_dir() {
+  # Usage: gsc_add_tmp_dir <directory_path>
+  # Adds a directory to the list of temporary directories to be cleaned up on exit.
+  local _d="$1"
+  [[ -d "${_d}" ]] && _gsc_tmp_dirs+=("${_d}")
 }
 
 gsc_cleanup() {
