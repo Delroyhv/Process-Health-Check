@@ -92,8 +92,6 @@ gsc_log_debug()     { if [[ "${_debug:-0}" == "1" || "${_debug:-0}" == "2" ]]; t
 gsc_loga() {
   if [[ -n "${_output_file:-}" ]]; then
     printf '%s\n' "$*" >> "${_output_file}"
-  else
-    printf '%s\n' "$*"
   fi
 }
 

@@ -502,7 +502,7 @@ make_query() {
     fi
 
     ### Form the query command (curl)
-    _mycmd=(curl -s -k -X GET "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query?query=${_urlenc_metric}")
+    _mycmd=(curl -s -k --connect-timeout 10 --max-time 30 -X GET "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query?query=${_urlenc_metric}")
     gsc_log_debug "Query command: ${_mycmd[*]}"
 
     ### Run the query command on Prometheus:
@@ -544,7 +544,7 @@ make_query_range() {
     _urlenc_metric+="&start=${_start}&end=${_end}&step=${_step}s"
 
     ### Form the query command (curl)
-    _mycmd=(curl -s -k -X GET "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query_range?query=${_urlenc_metric}")
+    _mycmd=(curl -s -k --connect-timeout 10 --max-time 60 -X GET "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query_range?query=${_urlenc_metric}")
     gsc_log_debug "Query Range command: ${_mycmd[*]}"
 
     ### Run the query command on Prometheus:
@@ -745,24 +745,28 @@ _num_metrics=$(echo "${_metric_queries}" | jq length)
 gsc_log_info "Starting query metrics: ${_num_metrics} queries"
 gsc_log_debug "METRIC QUERIES: ${_metric_queries}"
 
-_tmp_queries=$(mktemp)
-gsc_add_tmp_dir "$(dirname "${_tmp_queries}")"
-gsc_log_debug "Populating _tmp_queries: ${_tmp_queries}"
-echo "${_metric_queries}" | jq -rc '.[]' > "${_tmp_queries}"
-gsc_log_debug "Query file content: $(cat "${_tmp_queries}")"
+_tmp_queries_file=$(mktemp)
+echo "${_metric_queries}" | jq -rc '.[]' > "${_tmp_queries_file}"
 
-while IFS='' read -r _line; do
-    gsc_log_debug "ENTERING LOOP with _line: ${_line}"
+if [[ ! -s "${_tmp_queries_file}" ]]; then
+    gsc_log_error "Failed to generate query list from JSON"
+    rm -f "${_tmp_queries_file}"
+    exit 1
+fi
+
+while IFS='' read -r _line || [[ -n "${_line}" ]]; do
     [[ -z "${_line}" ]] && continue
 
     ### Increment the count of metrics/queries
-    ((_num_queries++))
+    ((_num_queries++)) || true
     
-    gsc_log_debug "Loop iter ${_num_queries}: ${_line}"
-
-    gsc_log_debug "============================"
-
     _event_id=$(echo "$_line" | jq -rc '.EventID // ""')
+    gsc_log_info "[${_num_queries}/${_num_metrics}] Processing: ${_event_id}..."
+    
+    if [[ -z "${_event_id}" ]]; then
+        gsc_log_error "Failed to extract EventID from line: ${_line}"
+        continue
+    fi
     gsc_log_debug "Extracted _event_id: ${_event_id}"
     _description=$(echo "$_line" | jq -rc '.Description // ""')
     _metric_query=$(echo "$_line" | jq -rc '.Query // ""')
@@ -813,11 +817,12 @@ while IFS='' read -r _line; do
         declare -A _msg_details=()
         declare -A _msg_counts=()
 
-        ###################
         # Process results (one value or multiple labels)
-        while IFS= read -r _result_json; do
+        while IFS='' read -r _result_json || [[ -n "${_result_json}" ]]; do
+            [[ -z "${_result_json}" ]] && continue
 
             _skipped_msgs=0  # initialize a counter for skipped messages
+            _label_name=""
 
             if [[ "$(gsc_is_empty "${_label}")" != "true" ]]; then
                 _label_name=$(echo "${_result_json}" | jq -c '.metric.'${_label} | tr -d '"')
@@ -826,7 +831,7 @@ while IFS='' read -r _line; do
             # If "Exclude" key is specified, then exclude a label that matches $_exclude_label variable
             if [[ "$(gsc_is_empty "${_label_name}")" != "true" && "${_exclude_label}" == "${_label_name}" ]]; then
                 gsc_log_debug "Skipping an excluded label: ${_exclude_label}"
-                ((_skipped_msgs++))
+                ((_skipped_msgs++)) || true
                 spinner # show a progress bar
                 continue
             fi
@@ -849,16 +854,16 @@ while IFS='' read -r _line; do
             _consecutive_count=0
             _probes=0
 
-            ###################
             # Process one value (single query) or multiple values (range query)
-            while IFS= read -r _value_json; do
+            while IFS='' read -r _value_json || [[ -n "${_value_json}" ]]; do
+                [[ -z "${_value_json}" ]] && continue
 
-                ((_probes++))
+                ((_probes++)) || true
 
                 _value=$(echo "${_value_json}" | jq -rc '.[1]' | tr -d '"')
                 if [[ "$(gsc_is_empty "${_value}")" == "true" || "${_value}" == "NaN" ]]; then
                     # No value - nothing to do
-                    ((_blank_query_count++))
+                    ((_blank_query_count++)) || true
                     gsc_log_debug "DEBUG: BLANK QUERY: ${_metric_query}, REPLY: ${_metric_result} , VALUE: '${_value_json}'"
                     continue
                 fi
@@ -877,7 +882,7 @@ while IFS='' read -r _line; do
                 _check_data=$(check_value "${_value}" "${_warning_criteria}" "${_error_criteria}" "${_ignore_criteria}")
                 if [[ "${_check_data}" == "" ]]; then
                     # Failed to check
-                    ((_failed_msg_count++))
+                    ((_failed_msg_count++)) || true
                     gsc_loga "INTERNAL-ERROR: FAILED QUERY: CANNOT PROCESS QUERY: ${_metric_query}, REPLY: ${_metric_result}"
                     continue
                 fi
@@ -890,7 +895,7 @@ while IFS='' read -r _line; do
 
                 if [[ "${_probes_enabled}" == "true" && "$(gsc_is_empty "${_consecutive_probes}")" != "true" ]]; then
                     if [[ "$(gsc_is_empty "${_step}")" != "true" && "${_step}" != "${_probes_interval}" ]]; then
-                        ((_blank_query_count++))
+                        ((_blank_query_count++)) || true
                         gsc_log_debug "DEBUG: SKIP CONSECUTIVE-TYPE QUERY: ${_metric_query} - it requires step=${_step}"
                         break  # only process this query if steps in the json match the global setting
                     fi
@@ -898,8 +903,8 @@ while IFS='' read -r _line; do
 
                     if [[ "${_level}" != "INFO" ]]; then
                         # Error or Warning - the condition happened - increment the count
-                        ((_msg_counts["${_level}"]++))
-                        ((_consecutive_count++))
+                        ((_msg_counts["${_level}"]++)) || true
+                        ((_consecutive_count++)) || true
                     elif [[ "${_consecutive_count}" -ge "${_consecutive_probes}" ]]; then
                         # The condition didn't happen this time, but we already have enough to trigger an alert
                         break
@@ -908,7 +913,7 @@ while IFS='' read -r _line; do
                         _consecutive_count=0
                     fi
                 else
-                    ((_msg_counts["${_level}"]++))
+                    ((_msg_counts["${_level}"]++)) || true
 
                     ####
                     # Check if need to skip showing this message
@@ -917,13 +922,13 @@ while IFS='' read -r _line; do
                     if [[ ! ( ( ("${_level}" == "INFO") && ("${_debug}" != "0") && ("${_msg_counts["INFO"]}" == "1") ) ||
                             ( ("${_level}" != "INFO") && ("${_msg_counts["${_level}"]}" == "1") ) ) ]] ; then
 
-                        ((_skipped_msgs++))
+                        ((_skipped_msgs++)) || true
                         spinner # show a progress bar
                         continue
                     fi
 
                     if [[ "${_level}" != "TELEMETRY" || "${_probes_enabled}" != "true" ]]; then
-                        ((_msg_count++))
+                        ((_msg_count++)) || true
                         _msg_details["${_level}"]="$(message_format_json_conditional "${_event_id}" "${_description}" "${_check_data}" "${_value_json}" "${_label_name}" "${_label}" )"
                     fi
                 fi
@@ -933,7 +938,7 @@ while IFS='' read -r _line; do
             # If level != INFO and != TELEMETRY and PROBE, report consecutive
             if [[ "$(gsc_is_empty "${_consecutive_probes}")" != "true" && "${_level}" != "INFO" && "${_level}" != "TELEMETRY" && "${_probes_enabled}" == "true" ]]; then
                 if [[ "${_consecutive_count}" -ge "${_consecutive_probes}" ]]; then
-                    ((_msg_count++))
+                    ((_msg_count++)) || true
                     _msg_details["${_level}"]="$(message_format_json_consecutive "${_event_id}" "${_description}" "${_check_data}" "${_consecutive_count}" "${_probes_interval}" "${_label_name}" "${_label}")"
                 fi
             fi
@@ -951,7 +956,7 @@ while IFS='' read -r _line; do
                         # No value - nothing to do
                         continue
                     fi
-                    ((_value_count++))
+                    ((_value_count++)) || true
                     if [[ -n "$(gsc_compare_value "${_value}" ">" "${_value_max}")" ]]; then
                         _value_max=${_value}
                     fi
@@ -968,7 +973,7 @@ while IFS='' read -r _line; do
 
                     _value_telem_json='['${_timestamp_start}','${_timestamp_end}',"'${_value_avg}'","'${_value_max}'","'${_value_min}'"]'
 
-                    ((_msg_count++))
+                    ((_msg_count++)) || true
 
                     _msg_details["${_level}"]="$(message_format_json_telem "${_event_id}" "${_description}" "${_check_data}" "${_value_telem_json}" "${_label_name}" "${_label}" )"
                 fi
@@ -987,12 +992,12 @@ while IFS='' read -r _line; do
 
     else
         ### Failed query - record it
-        ((_failed_msg_count++))
+        ((_failed_msg_count++)) || true
         gsc_loga "INTERNAL-ERROR: FAILED QUERY: ${_description}: ${_metric_query}, REPLY: ${_metric_result}"
     fi
 
-done < "${_tmp_queries}"
-rm -f "${_tmp_queries}"
+done < "${_tmp_queries_file}"
+rm -f "${_tmp_queries_file}"
 
 #################
 # Final printouts
@@ -1023,5 +1028,6 @@ fi
 
 # Calculate time to run
 _script_end_time=$(date -u +%s)
-((_script_run_seconds=_script_end_time-_current_time_epoch))
+((_script_run_seconds=_script_end_time-_current_time_epoch)) || true
 gsc_log_info "Total run time: ${_script_run_seconds} sec"
+
