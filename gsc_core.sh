@@ -85,10 +85,21 @@ gsc_log_critical()  { gsc_log CRITICAL "$*" ;}
 gsc_log_action()    { gsc_log ACTION "$*" ;}
 gsc_log_ok()        { gsc_log OK "$*" ;}
 gsc_log_success()   { gsc_log OK "$*" ;}
+gsc_log_debug()     { [[ "${_debug:-0}" == "1" || "${_debug:-0}" == "2" ]] && gsc_log INFO "[DEBUG] $*" ;}
 
 # For logging into a specific file (not stdout/stderr)
 gsc_loga() {
   printf '%s\n' "$*" >> "${_output_file}"
+}
+
+# -----------------------------
+# Display / UI
+# -----------------------------
+_gsc_spinner_idx=0
+gsc_spinner() {
+  local -a _spin=("-" "\\" "|" "/")
+  echo -ne "${_spin[$((_gsc_spinner_idx % 4))]} \r" >&2
+  ((_gsc_spinner_idx++))
 }
 
 # -----------------------------

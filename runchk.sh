@@ -158,7 +158,7 @@ if [[ "${_no_metrics}" -eq 0 ]]; then
     
     if [[ -n "${_prom_host}" ]]; then
         gsc_log_info "# RUN chk_metrics.sh on ${_prom_host}:${_prom_p}"
-        "${_script_dir}/chk_metrics.sh" "${_prom_host}" "${_prom_p}" 2>&1 | tee -a "${_tmp_report_output}" || true
+        "${_script_dir}/chk_metrics.sh" -c "${_prom_host}" -n "${_prom_p}" 2>&1 | tee -a "${_tmp_report_output}" || true
     else
         gsc_log_warn "# SKIP chk_metrics.sh: Prometheus host not found in ${_config_file}"
     fi
