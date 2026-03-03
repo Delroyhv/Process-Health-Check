@@ -259,30 +259,41 @@ gsc_compare_value() {
   local _op="$2"
   local _lim="$3"
 
-  local _v1 _v2
-  _v1=$(printf "%.0f" "$(echo "${_val}" | cut -d'.' -f1)")
-  _v2=$(printf "%.0f" "$(echo "${_lim}" | cut -d'.' -f1)")
+  # Fast path: Native Bash integer comparison
+  if [[ "${_val}" =~ ^-?[0-9]+$ ]] && [[ "${_lim}" =~ ^-?[0-9]+$ ]]; then
+    case "${_op}" in
+      ">")  (( _val >  _lim )) && { printf '%s\n' "${_val} > ${_lim}";  return 0; } ;;
+      "<")  (( _val <  _lim )) && { printf '%s\n' "${_val} < ${_lim}";  return 0; } ;;
+      ">=") (( _val >= _lim )) && { printf '%s\n' "${_val} >= ${_lim}"; return 0; } ;;
+      "<=") (( _val <= _lim )) && { printf '%s\n' "${_val} <= ${_lim}"; return 0; } ;;
+      "==") (( _val == _lim )) && { printf '%s\n' "${_val} == ${_lim}"; return 0; } ;;
+      "!=") (( _val != _lim )) && { printf '%s\n' "${_val} != ${_lim}"; return 0; } ;;
+    esac
+  fi
 
-  # Optimized path
+  # Floating point path: Use bc if available
+  if command -v bc >/dev/null 2>&1; then
+    local _res
+    _res=$(echo "if (${_val} ${_op} ${_lim}) 1 else 0" | bc 2>/dev/null)
+    if [[ "${_res}" == "1" ]]; then
+      printf '%s\n' "${_val} ${_op} ${_lim}"
+      return 0
+    fi
+    return 1
+  fi
+
+  # Optimized fallback: gsc_calc
   local _bin
   _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_calc"
   if [[ -x "${_bin}" ]]; then
-    _out=$("${_bin}" -op "${_op}" "${_v1}" "${_v2}" 2>/dev/null)
+    local _out
+    _out=$("${_bin}" -op "${_op}" "${_val}" "${_lim}" 2>/dev/null)
     if [[ -n "${_out}" ]]; then
       printf '%s\n' "${_out}"
       return 0
     fi
   fi
 
-  # Fallback to bash arithmetic
-  case "${_op}" in
-    ">") [[ $(( _v1 > _v2 )) -eq 1 ]] && printf '%s\n' "${_val} > ${_lim}" ;;
-    "<") [[ $(( _v1 < _v2 )) -eq 1 ]] && printf '%s\n' "${_val} < ${_lim}" ;;
-    ">=") [[ $(( _v1 >= _v2 )) -eq 1 ]] && printf '%s\n' "${_val} >= ${_lim}" ;;
-    "<=") [[ $(( _v1 <= _v2 )) -eq 1 ]] && printf '%s\n' "${_val} <= ${_lim}" ;;
-    "==") [[ $(( _v1 == _v2 )) -eq 1 ]] && printf '%s\n' "${_val} == ${_lim}" ;;
-    "!=") [[ $(( _v1 != _v2 )) -eq 1 ]] && printf '%s\n' "${_val} != ${_lim}" ;;
-  esac
   return 1
 }
 
@@ -293,7 +304,22 @@ gsc_arithmetic() {
   local _op="$2"
   local _v2="$3"
 
-  # Optimized path
+  # Fast path: Native Bash integer math
+  if [[ "${_v1}" =~ ^-?[0-9]+$ ]] && [[ "${_v2}" =~ ^-?[0-9]+$ ]] && [[ "${_op}" =~ ^[+\-*/%]$ ]]; then
+    # Prevent division by zero
+    if [[ "${_op}" == "/" || "${_op}" == "%" ]] && [[ "${_v2}" == "0" ]]; then
+       return 1
+    fi
+    echo $(( _v1 ${_op} _v2 ))
+    return 0
+  fi
+
+  # Floating point path: Use bc if available
+  if command -v bc >/dev/null 2>&1; then
+    echo "scale=2; ${_v1} ${_op} ${_v2}" | bc 2>/dev/null && return 0
+  fi
+
+  # Fallback: gsc_calc
   local _bin
   _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_calc"
   if [[ -x "${_bin}" ]]; then
@@ -301,8 +327,7 @@ gsc_arithmetic() {
     return $?
   fi
 
-  # Fallback
-  echo "scale=2; ${_v1} ${_op} ${_v2}" | bc 2>/dev/null || echo "$(( _v1 ${_op} _v2 ))"
+  return 1
 }
 
 # -----------------------------
