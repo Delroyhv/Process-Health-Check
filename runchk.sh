@@ -140,22 +140,22 @@ _s3_nodes=$(grep "S3GW instances:" health_report_services_instances.log | cut -d
 _dls_nodes=$(grep "DLS instances:" health_report_services_instances.log | cut -d: -f2 | xargs || echo "N/A")
 
 gsc_log_info "# RUN chk_chrony.sh"
-"${_script_dir}/chk_chrony.sh" -d .
+"${_script_dir}/chk_chrony.sh" -d . || true
 
 gsc_log_info "# RUN chk_top.sh"
-"${_script_dir}/chk_top.sh" -d .
+"${_script_dir}/chk_top.sh" -d . || true
 
 gsc_log_info "# RUN prep_partitions_json.sh"
-"${_script_dir}/prep_partitions_json.sh"
+"${_script_dir}/prep_partitions_json.sh" || true
 
 gsc_log_info "# RUN get_partition_tool_info.sh"
-"${_script_dir}/get_partition_tool_info.sh"
+"${_script_dir}/get_partition_tool_info.sh" || true
 
 gsc_log_info "# RUN chk_partInfo.sh"
-"${_script_dir}/chk_partInfo.sh" -d .
+"${_script_dir}/chk_partInfo.sh" -d . || true
 
 gsc_log_info "# RUN get_partition_details.sh"
-"${_script_dir}/get_partition_details.sh" . | tee "${_partition_details_log}"
+"${_script_dir}/get_partition_details.sh" . | tee "${_partition_details_log}" || true
 
 # ── Partition Growth Chart (conditional) ─────────────────────────────────────
 _max_partitions=$(grep -E "^[[:space:]]*[0-9]+ [0-9.]+" "${_partition_details_log}" | awk '{print $1}' | sort -rn | head -n 1 || echo 0)
@@ -190,52 +190,52 @@ if [[ "${_max_partitions}" -gt 1500 ]]; then
 fi
 
 gsc_log_info "# RUN chk_buckets.sh"
-"${_script_dir}/chk_buckets.sh" --bucket-owner
+"${_script_dir}/chk_buckets.sh" --bucket-owner || true
 if [[ -f health_report_buckets.log ]]; then
     cat health_report_buckets.log
 fi
 
 gsc_log_info "# RUN parse_instances_info.sh"
-"${_script_dir}/parse_instances_info.sh"
+"${_script_dir}/parse_instances_info.sh" || true
 
 
 # ── Full-detail checks (opt-in) ──────────────────────────────────────────────
 if [[ "${_full_detail}" -eq 1 ]]; then
     gsc_log_info "# RUN chk_disk_perf.sh"
-    "${_script_dir}/chk_disk_perf.sh" -d .
+    "${_script_dir}/chk_disk_perf.sh" -d . || true
 
     gsc_log_info "# RUN chk_filesystem.sh"
-    "${_script_dir}/chk_filesystem.sh" -d .
+    "${_script_dir}/chk_filesystem.sh" -d . || true
 
     gsc_log_info "# RUN chk_messages.sh"
-    "${_script_dir}/chk_messages.sh" -d .
+    "${_script_dir}/chk_messages.sh" -d . || true
 
     gsc_log_info "# RUN chk_docker.sh"
-   "${_script_dir}/chk_docker.sh" -d .
+   "${_script_dir}/chk_docker.sh" -d . || true
 else
     gsc_log_info "# SKIP chk_disk_perf.sh, chk_filesystem.sh, chk_messages.sh chk_docker.sh (pass --full-detail to enable)"
 fi
 
 gsc_log_info "# RUN chk_alerts.sh"
-"${_script_dir}/chk_alerts.sh"
+"${_script_dir}/chk_alerts.sh" || true
 
 gsc_log_info "# RUN chk_services_sh.sh -r '${VERSION_NUM:-}'"
-"${_script_dir}/chk_services_sh.sh" -r "${VERSION_NUM:-}"
+"${_script_dir}/chk_services_sh.sh" -r "${VERSION_NUM:-}" || true
 
 gsc_log_info "# RUN chk_snodes.sh"
-"${_script_dir}/chk_snodes.sh"
+"${_script_dir}/chk_snodes.sh" || true
 
 gsc_log_info "### RUN parse_services_memory.sh"
-# "${_script_dir}/parse_services_memory.sh"
+# "${_script_dir}/parse_services_memory.sh" || true
 
 gsc_log_info "# RUN chk_services_memory.sh"
-"${_script_dir}/chk_services_memory.sh"
+"${_script_dir}/chk_services_memory.sh" || true
 
 # ── Metrics check (opt-out) ──────────────────────────────────────────────────
 if [[ "${_no_metrics}" -eq 0 ]]; then
     gsc_log_info "# RUN chk_metrics.sh ${PROM_CMD_PARAM_DAILY:-}"
     # shellcheck disable=SC2086
-    "${_script_dir}/chk_metrics.sh" ${PROM_CMD_PARAM_DAILY:-}
+    "${_script_dir}/chk_metrics.sh" ${PROM_CMD_PARAM_DAILY:-} || true
 else
     gsc_log_info "# SKIP chk_metrics.sh (--no-metrics)"
 fi
