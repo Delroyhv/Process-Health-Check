@@ -48,7 +48,7 @@
 #     Rule of thumb: available < 20% → pressure building;
 #                    available < 10% → high pressure / imminent OOM
 #   Red Hat Knowledgebase — Understanding /proc/meminfo (Article 406773)
-#     https://access.redhat.com/solutions/406773
+#     https://access.redhat/com/solutions/406773
 #     MemAvailable reflects the same value as free(1) "available" column
 #   Brendan Gregg — USE Method: Memory
 #     Utilisation: used / total   Saturation: swap activity, pgscan/s
@@ -106,14 +106,16 @@ print_node_memory_summary() {
     gsc_log_info "Node-level memory details (from lsmem):"
     for node in "${!latest_lsmem[@]}"; do
         lsmem_out=$(cat "${latest_lsmem[$node]}")
-        mem_total_kb=$(echo "$lsmem_out" | awk '/Total online memory:/{print $4}')
-        if [[ -n "$mem_total_kb" ]]; then
+        mem_total_raw=$(echo "$lsmem_out" | awk '/Total online memory:/{print $4 $5}') # Get "256G"
+        mem_total_kb=$(gsc_to_kb "${mem_total_raw}") # Convert to KB
+        
+        if [[ -n "$mem_total_kb" && "$mem_total_kb" -gt 0 ]]; then
             node_memory_total["$node"]="${mem_total_kb}"
             ((total_memory_sum+=mem_total_kb))
         else
             node_memory_total["$node"]="N/A"
         fi
-        gsc_log_info "  - Node $node: Total memory ${mem_total_kb}KB" # Example line, adjust as needed
+        gsc_log_info "  - Node $node: Total memory ${mem_total_raw} (${mem_total_kb}KB)"
         ((total_nodes++))
     done
 
@@ -127,7 +129,7 @@ print_node_memory_summary() {
 
     # Group nodes by identical total memory
     declare -A memory_groups
-    for mem in "${!memory_groups[@]}"; do
+    for mem in "${!node_memory_total[@]}"; do
         nodes="${memory_groups[$mem]}"
         count=$(echo "$nodes" | wc -w)
         gsc_log_info "  - ${count} node(s) with ${mem}KB (${gsc_pretty_bytes "$((mem * 1024))"}) RAM: ${nodes}"
@@ -225,7 +227,7 @@ gsc_to_kb() {
         _unit="${BASH_REMATCH[2]}"
     elif [[ "${_size}" =~ ([0-9.]+) ]]; then # raw number (assume KB if large, MB if small)
         _value="${BASH_REMATCH[1]}"
-        if (( _value > 2000000 )); then # Heuristic: if > 2GB (2M KB), assume KB
+        if (( $(echo "$_value > 2000000" | bc -l) )); then # Heuristic: if > 2GB (2M KB), assume KB
             _unit="KB"
         else # assume MB
             _unit="MB"
