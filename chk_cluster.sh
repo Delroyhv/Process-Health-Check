@@ -37,7 +37,7 @@ else
     if [[ "${_version_num}" == "" ]]; then
         gsc_loga "WARNING: ${_product_version_file} DOES NOT CONTAIN HCP-CS VERSION NUMBER."
     else
-        gsc_loga "NOTICE: HCP-CS version: ${_version_num}"
+        gsc_log_info "Cloud Scale Version: ${_version_num}" # Explicitly print for easy parsing
         if [[ "${_version_num}" != "${_latest_version}" ]]; then
             gsc_loga "WARNING: product version ${_version_num} is not the latest (${_latest_version})"
         fi

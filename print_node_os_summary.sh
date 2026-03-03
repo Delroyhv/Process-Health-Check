@@ -41,7 +41,13 @@ print_node_os_summary() {
     done <<< "$files"
 
     gsc_log_info "Node operating system summary:"
+    local most_common_os=""
+    local max_count=0
     for os in "${!os_counts[@]}"; do
+        if (( ${os_counts[$os]} > max_count )); then
+            max_count=${os_counts[$os]}
+            most_common_os="${os}"
+        fi
         gsc_log_info "${os_counts[$os]} nodes running: ${os}"
         if [[ -n "${_current_os:-}" ]]; then
             local _os_version="${os#* }"
@@ -50,6 +56,10 @@ print_node_os_summary() {
             fi
         fi
     done
+    
+    if [[ -n "${most_common_os}" ]]; then
+        gsc_log_info "OS version: ${most_common_os}"
+    fi
 }
 
 print_node_os_summary

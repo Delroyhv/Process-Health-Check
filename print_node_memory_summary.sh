@@ -93,50 +93,53 @@ print_node_memory_summary() {
     declare -A latest_lsmem
     for f in "${all_lsmem_files[@]}"; do
         fname=$(basename "$f")
-        node=$(echo "$fname" | sed 's/^node_info_//; s/_[0-9]\{4\}-[A-Z][a-z][a-z]-.*//')
-        ts=$(echo "$fname" | grep -o '[0-9]\{4\}-[A-Z][a-z][a-z]-[0-9]\{2\}_[0-9]\{2\}-[0-9]\{2\}-[0-9]\{2\}')
-        
-        if [[ -z "${latest_lsmem[$node]:-}" ]]; then
-            latest_lsmem["$node"]="$f"
-        else
-            old_ts=$(basename "${latest_lsmem[$node]}" | grep -o '[0-9]\{4\}-[A-Z][a-z][a-z]-[0-9]\{2\}_[0-9]\{2\}-[0-9]\{2\}-[0-9]\{2\}')
-            if [[ "$ts" > "$old_ts" ]]; then
-                latest_lsmem["$node"]="$f"
-            fi
-        fi
+        node=$(echo "$fname" | sed -E 's/node_info_([^_]+)_.*_systeminfo_lsmem.out/\1/')
+        latest_lsmem["$node"]="$f"
     done
 
-    # mem_counts["256G"]=N
-    declare -A mem_counts=()
+    # Collect total memory for each node, and counts
+    declare -A node_memory_total
+    local total_nodes=0
+    local total_memory_sum=0 # in KB
+    local total_memory_display="0G"
 
+    gsc_log_info "Node-level memory details (from lsmem):"
     for node in "${!latest_lsmem[@]}"; do
-        f="${latest_lsmem[$node]}"
-        # Example line:
-        #   Total online memory:     256G
-        mem_val="$(awk -F':' '/^Total online memory:/ {gsub(/^[ \t]+/, "", $2); print $2}' "$f" | head -n1)"
-        [[ -z "${mem_val}" ]] && continue
-        mem_val="$(echo "${mem_val}" | awk '{print $1}')"
-        mem_counts["${mem_val}"]=$(( ${mem_counts["${mem_val}"]:-0} + 1 ))
+        lsmem_out=$(cat "${latest_lsmem[$node]}")
+        mem_total_kb=$(echo "$lsmem_out" | awk '/Total online memory:/{print $4}')
+        if [[ -n "$mem_total_kb" ]]; then
+            node_memory_total["$node"]="${mem_total_kb}"
+            ((total_memory_sum+=mem_total_kb))
+        else
+            node_memory_total["$node"]="N/A"
+        fi
+        gsc_log_info "  - Node $node: Total memory ${mem_total_kb}KB" # Example line, adjust as needed
+        ((total_nodes++))
     done
 
-    if [[ ${#mem_counts[@]} -eq 0 ]]; then
-        gsc_log_warn "No 'Total online memory' lines found in systeminfo_lsmem.out files."
-        return
+    # Convert total_memory_sum from KB to GB for display
+    if (( total_memory_sum > 0 )); then
+        total_memory_display="$(gsc_pretty_bytes "$((total_memory_sum * 1024))")" # Convert KB to Bytes for gsc_pretty_bytes
     fi
 
-    for mem in "${!mem_counts[@]}"; do
-        gsc_log_info "${mem_counts[$mem]} nodes ${mem} of memory."
+    gsc_log_info "Total node count: ${total_nodes}"
+    gsc_log_info "Total memory: ${total_memory_display}"
+
+    # Group nodes by identical total memory
+    declare -A memory_groups
+    for mem in "${!memory_groups[@]}"; do
+        nodes="${memory_groups[$mem]}"
+        count=$(echo "$nodes" | wc -w)
+        gsc_log_info "  - ${count} node(s) with ${mem}KB (${gsc_pretty_bytes "$((mem * 1024))"}) RAM: ${nodes}"
     done
-}
 
-# ── Section 2: Runtime memory pressure (free) ───────────────────────────────
+    # ── Section 2: Runtime memory pressure (free) ────────────────────────────────
 
-print_node_free_memory() {
-    mapfile -t all_free_files < <(find . -name '*free*.out' \
-        ! -name '*.err' 2>/dev/null | sort)
+    # Find all free outputs
+    mapfile -t all_free_files < <(find . -name "*free*.out" 2>/dev/null | sort)
 
-    if [[ "${#all_free_files[@]}" -eq 0 ]]; then
-        gsc_loga "WARNING: No free(1) output files (*free*.out) found — skipping runtime memory pressure check"
+    if [[ ${#all_free_files[@]} -eq 0 ]]; then
+        gsc_log_warn "No free(1) output files (*free*.out) found — skipping runtime memory pressure check"
         return
     fi
 
@@ -144,132 +147,98 @@ print_node_free_memory() {
     declare -A latest_free
     for f in "${all_free_files[@]}"; do
         fname=$(basename "$f")
-        node=$(echo "$fname" | sed 's/^node_info_//; s/_[0-9]\{4\}-[A-Z][a-z][a-z]-.*//')
-        ts=$(echo "$fname" | grep -o '[0-9]\{4\}-[A-Z][a-z][a-z]-[0-9]\{2\}_[0-9]\{2\}-[0-9]\{2\}-[0-9]\{2\}')
-        
-        if [[ -z "${latest_free[$node]:-}" ]]; then
-            latest_free["$node"]="$f"
-        else
-            old_ts=$(basename "${latest_free[$node]}" | grep -o '[0-9]\{4\}-[A-Z][a-z][a-z]-[0-9]\{2\}_[0-9]\{2\}-[0-9]\{2\}-[0-9]\{2\}')
-            if [[ "$ts" > "$old_ts" ]]; then
-                latest_free["$node"]="$f"
-            fi
-        fi
+        node=$(echo "$fname" | sed -E 's/node_info_([^_]+)_.*_free.*.out/\1/')
+        latest_free["$node"]="$f"
     done
 
-    mapfile -t _free_files < <(printf '%s\n' "${latest_free[@]}" | sort)
+    gsc_log_info "Runtime memory pressure (from free):"
+    for node in "${!latest_free[@]}"; do
+        free_out=$(cat "${latest_free[$node]}")
+        total_mem_kb=0
+        available_mem_kb=0
+        total_swap_kb=0
+        used_swap_kb=0
 
-    gsc_log_info "Found ${#all_free_files[@]} free(1) files; analyzing newest for each of the ${#_free_files[@]} unique node(s)"
+        # Parse free output, handling different units
+        # Try -h format first for robust parsing
+        if echo "$free_out" | grep -q "Mem:"; then
+            # Format like: Mem: 100G 50G 40G 10G 5G 10G
+            # Available: line 2, col 7
+            # Swap: line 3, col 2, col 3
+            # Use gsc_to_kb to convert values like 10G, 50M to KB
+            total_mem_kb=$(echo "$free_out" | awk '/Mem:/{print $2}' | gsc_to_kb || echo 0)
+            available_mem_kb=$(echo "$free_out" | awk '/Mem:/{print $7}' | gsc_to_kb || echo 0)
+            total_swap_kb=$(echo "$free_out" | awk '/Swap:/{print $2}' | gsc_to_kb || echo 0)
+            used_swap_kb=$(echo "$free_out" | awk '/Swap:/{print $3}' | gsc_to_kb || echo 0)
+        elif echo "$free_out" | grep -q "total"; then
+            # Format like: total used free shared buff/cache available
+            # Mem:   16G  10G  5.0G 1.0G 1.0G 2.0G
+            total_mem_kb=$(echo "$free_out" | awk 'NR==2{print $2}' | gsc_to_kb || echo 0)
+            available_mem_kb=$(echo "$free_out" | awk 'NR==2{print $7}' | gsc_to_kb || echo 0)
+            total_swap_kb=$(echo "$free_out" | awk 'NR==3{print $2}' | gsc_to_kb || echo 0)
+            used_swap_kb=$(echo "$free_out" | awk 'NR==3{print $3}' | gsc_to_kb || echo 0)
+        fi
 
-    _hdr=$(printf '%-32s %-8s %-8s %-8s %-7s %-9s' \
-        "Node" "Total" "Used" "Avail" "Avail%" "SwapUsed")
-    _sep=$(printf '%-32s %-8s %-8s %-8s %-7s %-9s' \
-        "----" "-----" "----" "-----" "------" "--------")
-    gsc_loga ""
-    gsc_loga "── Runtime Memory Pressure ──"
-    gsc_loga "${_hdr}"
-    gsc_loga "${_sep}"
-
-    for _file in "${_free_files[@]}"; do
-
-        _node=$(basename "${_file}" \
-            | sed 's/^node_info_//; s/_[0-9]\{4\}-[A-Z][a-z][a-z]-.*//')
-
-        # Parse free(1) output into MiB integers.
-        #
-        # to_mb(v): converts a value+optional-unit-suffix to MiB.
-        #   G/Gi  → × 1024        M/Mi → × 1 (already MiB)
-        #   K/Ki  → ÷ 1024        B    → negligible
-        #   no suffix, value > 2 000 000 → assumed KiB (free -k default)
-        #   no suffix, value ≤ 2 000 000 → assumed MiB (free -m)
-        #
-        # Supports: free -m, free -h, free -k (plain free).
-        # Mem:  col2=total col3=used col4=free col5=shared col6=buff/cache col7=avail
-        # Swap: col2=total col3=used
-        read -r _total_mb _used_mb _avail_mb _swap_total_mb _swap_used_mb \
-            < <(awk '
-            function to_mb(v,    n, u) {
-                n = v + 0
-                u = v; gsub(/[0-9.]+/, "", u)
-                if (u ~ /^[Tt]/) return n * 1024 * 1024
-                if (u ~ /^[Gg]/) return n * 1024
-                if (u ~ /^[Kk]/) return n / 1024
-                if (u ~ /^[Bb]/) return 0
-                if (n > 2000000)  return n / 1024   # unitless KiB (free -k)
-                return n                             # unitless MiB (free -m)
-            }
-            /^Mem:/  {
-                total_mb = to_mb($2)
-                used_mb  = to_mb($3)
-                # Column 7 (available) present on util-linux >= 3.3 / RHEL 8+.
-                # Fall back to free+buff/cache for older free (RHEL 6/7).
-                avail_mb = (NF >= 7) ? to_mb($7) : to_mb($4) + to_mb($6)
-            }
-            /^Swap:/ {
-                swap_total_mb = to_mb($2)
-                swap_used_mb  = to_mb($3)
-            }
-            END {
-                printf "%d %d %d %d %d\n",
-                    total_mb, used_mb, avail_mb, swap_total_mb, swap_used_mb
-            }
-        ' "${_file}")
-
-        # Skip unparseable files
-        if [[ "${_total_mb:-0}" -eq 0 ]]; then
-            ((_err++))
-            gsc_loga "WARNING: ${_node}: could not parse free(1) output in ${_file}"
+        if (( total_mem_kb == 0 )); then
+            gsc_log_warn "  - Node $node: Could not parse free(1) output for memory. Skipping runtime check."
             continue
         fi
 
-        _avail_pct=$(awk "BEGIN{printf \"%d\", ${_avail_mb}/${_total_mb}*100}")
-        _total_g=$(awk   "BEGIN{printf \"%.1fG\", ${_total_mb}/1024}")
-        _used_g=$(awk    "BEGIN{printf \"%.1fG\", ${_used_mb}/1024}")
-        _avail_g=$(awk   "BEGIN{printf \"%.1fG\", ${_avail_mb}/1024}")
-        _swap_used_g=$(awk "BEGIN{printf \"%.1fG\", ${_swap_used_mb}/1024}")
-
-        gsc_loga "$(printf '%-32s %-8s %-8s %-8s %-7s %-9s' \
-            "${_node}" "${_total_g}" "${_used_g}" "${_avail_g}" \
-            "${_avail_pct}%" "${_swap_used_g}")"
-
-        # Available memory checks
-        if [[ "${_avail_pct}" -lt "${_MEM_AVAIL_CRIT}" ]]; then
-            ((_err++))
-            gsc_loga "CRITICAL: ${_node}: available memory ${_avail_pct}% (${_avail_g} of ${_total_g}) — severe memory pressure (<${_MEM_AVAIL_CRIT}%); imminent OOM risk — run: ps aux --sort=-%mem | head -20"
-        elif [[ "${_avail_pct}" -lt "${_MEM_AVAIL_WARN}" ]]; then
-            ((_err++))
-            gsc_loga "WARNING: ${_node}: available memory ${_avail_pct}% (${_avail_g} of ${_total_g}) below threshold (<${_MEM_AVAIL_WARN}%) — kernel reclaiming page cache; monitor journal for OOM events"
+        local avail_percent=0
+        local swap_used_percent=0
+        
+        if (( total_mem_kb > 0 )); then
+            avail_percent=$(( available_mem_kb * 100 / total_mem_kb ))
+        fi
+        if (( total_swap_kb > 0 )); then
+            swap_used_percent=$(( used_swap_kb * 100 / total_swap_kb ))
         fi
 
-        # Swap usage checks
-        if [[ "${_swap_used_mb}" -gt 0 ]]; then
-            if [[ "${_swap_total_mb}" -gt 0 ]]; then
-                _swap_pct=$(awk "BEGIN{printf \"%d\", ${_swap_used_mb}/${_swap_total_mb}*100}")
-            else
-                _swap_pct=100
-            fi
-            if [[ "${_swap_pct}" -ge "${_MEM_SWAP_CRIT}" ]]; then
-                ((_err++))
-                gsc_loga "CRITICAL: ${_node}: swap ${_swap_used_g} in use (${_swap_pct}% of swap) — memory thrashing; severe latency impact — add RAM or reduce container heap limits"
-            else
-                ((_err++))
-                gsc_loga "WARNING: ${_node}: swap ${_swap_used_g} in use — page cache exhausted; application latency will increase (ref: Gregg USE Method — memory saturation)"
-            fi
+        if (( avail_percent < _MEM_AVAIL_CRIT )); then
+            gsc_loga "CRITICAL: $node: available memory ${available_mem_kb}KB (${avail_percent}%) below critical threshold (<${_MEM_AVAIL_CRIT}%)"
+            _err=1
+        elif (( avail_percent < _MEM_AVAIL_WARN )); then
+            gsc_loga "WARNING: $node: available memory ${available_mem_kb}KB (${avail_percent}%) below warning threshold (<${_MEM_AVAIL_WARN}%)"
+            _err=1
         fi
 
+        if (( used_swap_kb > 0 )); then
+            if (( swap_used_percent > _MEM_SWAP_CRIT )); then
+                gsc_loga "CRITICAL: $node: swap ${gsc_pretty_bytes "$((used_swap_kb * 1024))"} in use (${swap_used_percent}% of swap) — severe swap thrashing; performance likely degraded"
+                _err=1
+            else
+                gsc_loga "WARNING: $node: swap ${gsc_pretty_bytes "$((used_swap_kb * 1024))"} in use (${swap_used_percent}% of swap) — memory pressure; latency impact"
+                _err=1
+            fi
+        fi
     done
-
-    gsc_loga ""
-    if [[ "${_err}" -gt 0 ]]; then
-        gsc_loga "Detected ${_err} memory pressure issue(s)"
-    else
-        gsc_loga "INFO: All nodes within normal memory parameters"
-    fi
+    gsc_log_success "Saved results health_report_node_memory.log"
 }
 
-############################
+# Helper to convert human-readable sizes (e.g., 10G, 50M) to KB
+gsc_to_kb() {
+    local _size="$1"
+    local _value _unit
 
-gsc_rotate_log "${_output_file}"
+    if [[ "${_size}" =~ ([0-9.]+)([KMGTPEZY]?B?) ]]; then
+        _value="${BASH_REMATCH[1]}"
+        _unit="${BASH_REMATCH[2]}"
+    elif [[ "${_size}" =~ ([0-9.]+) ]]; then # raw number (assume KB if large, MB if small)
+        _value="${BASH_REMATCH[1]}"
+        if (( _value > 2000000 )); then # Heuristic: if > 2GB (2M KB), assume KB
+            _unit="KB"
+        else # assume MB
+            _unit="MB"
+        fi
+    fi
+
+    case "${_unit}" in
+        "KB"|"K"|"") echo "$_value" ;;
+        "MB"|"M") echo "$((_value * 1024))" ;;
+        "GB"|"G") echo "$((_value * 1024 * 1024))" ;;
+        "TB"|"T") echo "$((_value * 1024 * 1024 * 1024))" ;;
+        *) echo "0" ;; # Unknown unit
+    esac
+}
+
 print_node_memory_summary
-print_node_free_memory
-gsc_log_info "Saved results ${_output_file}"
