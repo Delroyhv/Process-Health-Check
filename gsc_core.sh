@@ -92,6 +92,16 @@ gsc_loga() {
 }
 
 # -----------------------------
+# File & Search
+# -----------------------------
+gsc_find_file() {
+  # Usage: gsc_find_file <directory> <pattern>
+  local _dir="$1"
+  local _pat="$2"
+  find "${_dir}" -type f -name "*${_pat}*" 2>/dev/null | sort -r | head -n 1
+}
+
+# -----------------------------
 # JSON helpers
 # -----------------------------
 gsc_build_json_from_matches() {
@@ -236,7 +246,7 @@ gsc_truncate_log() {
 }
 
 # -----------------------------
-# Tempdir + cleanup
+# Temporary directory management
 # -----------------------------
 _gsc_tmp_dirs=()
 gsc_mktempdir() {
@@ -252,17 +262,33 @@ gsc_cleanup() {
 }
 
 # -----------------------------
-# Sudo & Container
+# Secure Sudo & Vault
 # -----------------------------
 _GSC_SUDO_PASS_VAULTED=""
+
+gsc_vault_encrypt() {
+  local _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
+  if [[ -x "${_bin}" ]]; then "${_bin}" -encrypt "$1"; else echo "$1"; fi
+}
+
+gsc_vault_decrypt() {
+  local _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
+  if [[ -x "${_bin}" ]]; then "${_bin}" -decrypt "$1"; else echo "$1"; fi
+}
+
 gsc_prompt_sudo_password() {
   if [[ -n "${_GSC_SUDO_PASS_VAULTED}" ]] || sudo -n true 2>/dev/null; then return 0; fi
   local _pass; printf "Password for sudo: " >&2; read -rs _pass; printf "\n" >&2
   [[ -n "${_pass}" ]] && _GSC_SUDO_PASS_VAULTED=$(gsc_vault_encrypt "${_pass}")
 }
+
 gsc_sudo() {
   if sudo -n true 2>/dev/null; then sudo "$@"; elif [[ -n "${_GSC_SUDO_PASS_VAULTED}" ]]; then gsc_vault_decrypt "${_GSC_SUDO_PASS_VAULTED}" | sudo -S "$@"; else sudo "$@"; fi
 }
+
+# -----------------------------
+# Container engine abstraction
+# -----------------------------
 gsc_detect_engine() {
   if command -v podman >/dev/null 2>&1; then echo podman; elif command -v docker >/dev/null 2>&1; then echo docker; else return 1; fi
 }
@@ -306,16 +332,72 @@ gsc_arithmetic() {
 }
 
 # -----------------------------
+# Bytes & Storage
+# -----------------------------
+gsc_pretty_bytes() {
+  local _bytes="$1"
+  if (( _bytes == 0 )); then echo "0B"; return; fi
+  local _units=(B K M G T P E Z Y)
+  local _scale=1
+  local _i=0
+  for ((i=0; i<${#_units[@]}; i++)); do
+    if (( _bytes < 1024**($i+1) )); then _scale=$((1024**$i)); break; fi
+  done
+  local _val=$(echo "scale=1; ${_bytes} / ${_scale}" | bc)
+  echo "${_val}${_units[$i]}" | sed 's/\.0//'
+}
+
+gsc_parse_bytes_to_kb() {
+    local _size="$1"
+    if [[ "${_size}" =~ ^([0-9.]+)([KMGTPEZY]?B?)$ ]]; then
+        local _val="${BASH_REMATCH[1]}"
+        local _unit="${BASH_REMATCH[2]%B}"
+        case "${_unit}" in
+            K) echo "${_val}" ;;
+            M) echo "scale=0; ${_val} * 1024 / 1" | bc ;;
+            G) echo "scale=0; ${_val} * 1024 * 1024 / 1" | bc ;;
+            T) echo "scale=0; ${_val} * 1024^2 * 1024 / 1" | bc ;;
+            *) echo "${_val}" ;;
+        esac
+    else echo "0"; fi
+}
+
+# -----------------------------
 # Date / Time
 # -----------------------------
-gsc_port_in_use() {
-  local _p="$1" _ep
-  for _ep in "${_gsc_excluded_ports[@]:-}"; do [[ "${_p}" -eq "${_ep}" ]] && return 0; done
-  if command -v ss >/dev/null 2>&1; then ss -tuln 2>/dev/null | awk 'NR>1 {print $5}' | grep -qE "(:|\\.)${_p}$" && return 0
-  elif command -v netstat >/dev/null 2>&1; then netstat -tuln 2>/dev/null | awk 'NR>2 {print $4}' | grep -qE "(:|\\.)${_p}$" && return 0; fi
-  return 1
+gsc_get_date_format() {
+  local _ts="${1:-$(date +%s)}"
+  date -u -d "@${_ts}" +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "${_ts}" +'%Y-%m-%dT%H:%M:%SZ'
 }
 gsc_timestamp() { date +%Y-%m-%dT%H:%M:%S%z; }
+
+# -----------------------------
+# Space estimation helpers
+# -----------------------------
+gsc_estimate_uncompressed_size() {
+  local _archive="$1"
+  [[ "${_archive}" == *.xz ]] && xz --robot -l -- "${_archive}" 2>/dev/null | awk '$1=="totals"{print $5}' | tail -n1 || return 1
+}
+
+gsc_check_extract_space() {
+  local _archive="$1" _target_dir="$2" _warn_pct="${3:-10}" _fail_pct="${4:-5}"
+  local _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 0
+  local _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 0
+  read -r _dev _total _used _avail _use _mnt <<<"${_df_line}"
+  local _free_after=$((_avail - _size))
+  if (( _free_after < 0 )); then gsc_log_error "Not enough space"; return 2; fi
+  local _pct_after=$(( 100 * _free_after / _total ))
+  if (( _pct_after < _fail_pct )); then return 2; elif (( _pct_after < _warn_pct )); then return 0; fi
+}
+
+gsc_print_space_estimate() {
+  local _archive="$1" _target_dir="$2"
+  local _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 1
+  local _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 1
+  read -r _dev _total _used _avail _use _mnt <<<"${_df_line}"
+  local _pct=$(( 100 * (_avail - _size) / _total ))
+  gsc_log_info "Estimate for ${_archive}: size≈$((_size/1048576)) MiB, free_after≈~${_pct}%."
+}
 
 # -----------------------------
 # HCPCS legacy globals + helpers (Restored)
