@@ -238,17 +238,29 @@ if [[ -n "${_report_file}" ]]; then
     echo ""
     echo '```text'
 
-    gsc_log_info "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
-
-    _raw_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" || true)
-
-    if [[ -n "${_raw_issues}" ]]; then
-        printf '%s\n' "${_raw_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' | gsc_log_critical_nostdout
-        printf '%s\n' "${_raw_issues}" | grep "ERROR" | grep -v "CRITICAL" | sed 's/^health_report_[^:]*://' | gsc_log_error_nostdout
-        printf '%s\n' "${_raw_issues}" | grep "WARNING" | grep -vE "CRITICAL|ERROR" | sed 's/^health_report_[^:]*://' | gsc_log_warn_nostdout
-        printf '%s\n' "${_raw_issues}" | grep "ACTION" | grep -vE "CRITICAL|ERROR|WARNING" | sed 's/^health_report_[^:]*://' | gsc_log_action_nostdout
+    # Concise summary of high-priority issues
+    gsc_log_info "--- High-Level Critical Issues ---"
+    _critical_issues=$(grep -E "CRITICAL|ALERT|ERROR" health_report*.log | grep -Ev "${_issues_filter}" || true)
+    if [[ -n "${_critical_issues}" ]]; then
+        printf '%s\n' "${_critical_issues}" | sed 's/^health_report_[^:]*://' | sort -u
+    else
+        echo "No critical issues detected."
     fi
+    echo ""
 
+    gsc_log_info "--- All Detected Issues (Sorted by Severity) ---"
+    _all_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" || true)
+    if [[ -n "${_all_issues}" ]]; then
+        # Sorting by severity (CRITICAL/ALERT > ERROR > WARNING > ACTION)
+        {
+            printf '%s\n' "${_all_issues}" | grep -E "CRITICAL|ALERT"
+            printf '%s\n' "${_all_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT"
+            printf '%s\n' "${_all_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR"
+            printf '%s\n' "${_all_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING"
+        } | sed 's/^health_report_[^:]*://'
+    else
+        echo "No issues detected."
+    fi
     echo '```'
     echo ""
 
