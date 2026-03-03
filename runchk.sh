@@ -96,12 +96,20 @@ _cluster_name=$(grep "Cluster name" "${_tmp_report_output}" | head -n 1 | cut -d
 
 gsc_log_info "# RUN print_node_memory_summary.sh"
 "${_script_dir}/print_node_memory_summary.sh"
+# Capture total nodes and memory
+_total_nodes=$(grep "Total node count:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2 | xargs || echo "N/A")
+_total_memory=$(grep "Total memory:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2 | xargs || echo "N/A")
 
 gsc_log_info "# RUN print_node_os_summary.sh"
 "${_script_dir}/print_node_os_summary.sh"
+# Capture OS Version (first unique OS detected)
+_os_version=$(grep "OS version:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 
 gsc_log_info "# RUN chk_cluster.sh"
 "${_script_dir}/chk_cluster.sh"
+# Capture Cloud Scale Version
+_cs_version=$(grep "HCP-CS version:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2 | xargs || echo "N/A")
+
 
 gsc_log_info "# RUN chk_lshw.sh"
 "${_script_dir}/chk_lshw.sh" -d .
@@ -242,9 +250,10 @@ if [[ -n "${_report_file}" ]]; then
         echo "|---|---|"
         echo "| Cluster Name | ${_cluster_name} |"
         echo "| Cluster Serial | ${_cluster_serial} |"
-        echo "| Cloud Scale Version | ${VERSION_NUM:-N/A} |"
-        echo "| OS Version | N/A |" # Placeholder - needs to be extracted
-        echo "| Total Nodes | N/A |" # Placeholder - needs to be extracted
+        echo "| Cloud Scale Version | ${_cs_version} |"
+        echo "| OS Version | ${_os_version} |" # Placeholder - needs to be extracted
+        echo "| Total Nodes | ${_total_nodes} |" # Placeholder - needs to be extracted
+        echo "| Total Memory | ${_total_memory} |"
         echo "| Nodes MDGW | N/A |" # Placeholder - needs to be extracted
         echo "| Nodes S3 | N/A |" # Placeholder - needs to be extracted
         echo "| Nodes DLS | N/A |" # Placeholder - needs to be extracted
