@@ -91,8 +91,8 @@ gsc_log_info "# RUN selfcheck.sh"
 gsc_log_info "# RUN print_cluster_identity_summary.sh"
 "${_script_dir}/print_cluster_identity_summary.sh"
 # Capture cluster identity details
-_cluster_serial=$(grep "Cluster serial" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
-_cluster_name=$(grep "Cluster name" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
+_cluster_serial=$(grep "Cluster serial (from cluster.serial):" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
+_cluster_name=$(grep "Cluster name   (from cluster.name):" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 
 gsc_log_info "# RUN print_node_memory_summary.sh"
 "${_script_dir}/print_node_memory_summary.sh"
