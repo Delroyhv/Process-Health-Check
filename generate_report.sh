@@ -36,8 +36,7 @@ _total_nodes=$(grep -h "Total node count:" health_report_*.log 2>/dev/null | hea
 _total_memory=$(grep -h "Total memory:" health_report_*.log 2>/dev/null | head -n 1 | cut -d: -f2 | xargs || echo "N/A")
 _os_version=$(grep -h "OS version:" health_report_*.log 2>/dev/null | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 _cs_version=$(grep -h "Cloud Scale Version:" health_report_*.log 2>/dev/null | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
-_server_model=$(grep -h "Server Model (Consolidated):" health_report_*.log 2>/dev/null | tail -n +2 | sed 's/^[[:space:]]*- //g' | sed 's/node(s) with model: //g' | tr '
-' ';' | sed 's/;$//' || echo "N/A")
+_server_model=$(grep -h "Server Model (Consolidated):" health_report_*.log 2>/dev/null | tail -n +2 | sed 's/^[[:space:]]*- //g' | sed 's/node(s) with model: //g' | tr '\n' ';' | sed 's/;$//' || echo "N/A")
 
 _mdgw_nodes=$(grep -h "MDGW instances:" health_report_services_instances.log 2>/dev/null | cut -d: -f2 | xargs || echo "N/A")
 _s3_nodes=$(grep -h "S3GW instances:" health_report_services_instances.log 2>/dev/null | cut -d: -f2 | xargs || echo "N/A")
@@ -45,6 +44,20 @@ _dls_nodes=$(grep -h "DLS instances:" health_report_services_instances.log 2>/de
 
 _issues_filter='^health_report_messages\.log:|was modified on node [^ ]+|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source(s) fully reachable|^[[:space:]]*[0-9]+ [0-9.]+\s*\[(CRITICAL|WARNING|DANGER|good)\]'
 _issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" | wc -l || echo 0)
+
+# Metrics specific summary
+_metric_logs=$(ls health_report_metrics_*.log 2>/dev/null)
+_m_critical=0
+_m_error=0
+_m_warning=0
+_m_alert=0
+
+if [[ -n "${_metric_logs}" ]]; then
+    _m_critical=$(grep -h "CRITICAL" ${_metric_logs} | wc -l)
+    _m_error=$(grep -h "ERROR" ${_metric_logs} | grep -v "CRITICAL" | wc -l)
+    _m_warning=$(grep -h "WARNING" ${_metric_logs} | wc -l)
+    _m_alert=$(grep -h "ALERT" ${_metric_logs} | wc -l)
+fi
 
 # 2. Generate Markdown
 {
@@ -68,25 +81,31 @@ _issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log
     echo "| Total Issues Detected | ${_issues_count} |"
     echo ""
 
-    echo "## 2. Issues Detected"
+    echo "## 2. Metrics Summary (Prometheus)"
+    echo ""
+    echo "| Severity | Count |"
+    echo "|---|---|"
+    echo "| CRITICAL | ${_m_critical} |"
+    echo "| ERROR | ${_m_error} |"
+    echo "| WARNING | ${_m_warning} |"
+    echo "| ALERT | ${_m_alert} |"
+    echo ""
+
+    echo "## 3. Issues Detected"
     echo '```text'
     _report_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" || true)
     if [[ -n "${_report_issues}" ]]; then
-        printf '%s
-' "${_report_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://'
-        printf '%s
-' "${_report_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://'
-        printf '%s
-' "${_report_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR" | sed 's/^health_report_[^:]*://'
-        printf '%s
-' "${_report_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING" | sed 's/^health_report_[^:]*://'
+        printf '%s\n' "${_report_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://'
+        printf '%s\n' "${_report_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://'
+        printf '%s\n' "${_report_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR" | sed 's/^health_report_[^:]*://'
+        printf '%s\n' "${_report_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING" | sed 's/^health_report_[^:]*://'
     else
         echo "No significant issues detected."
     fi
     echo '```'
     echo ""
 
-    echo "## 3. Partition Analysis"
+    echo "## 4. Partition Analysis"
     if [[ -f "partition_growth_chart.log" ]]; then
         echo "### Growth Trends"
         echo '```text'
