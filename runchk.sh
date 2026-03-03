@@ -224,42 +224,48 @@ _issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log
 
 if [[ -n "${_report_file}" ]]; then
     # Only capture the summary and issues section for the report
-    _summary_start_line=$(grep -n "================================================" "${_tmp_report_output}" | head -n 1 | cut -d: -f1)
-    if [[ -n "${_summary_start_line}" ]]; then
-        sed -n "${_summary_start_line},\$p" "${_tmp_report_output}" | head -n -1 > "${_report_file}"
-    else
-        gsc_log_warn "Could not find report summary start line. Generating full log report."
-        cat "${_tmp_report_output}" > "${_report_file}"
-    fi
+    # This section starts with "================================================"
+    # and ends after the "ACTION" section.
 
-    # Convert the raw log output to Markdown with colored severity
-    gsc_log_info "Converting raw output to Markdown..."
+    # Filtered and formatted raw issues as in the prompt
+    _report_issues=$(
+        grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" || true
+    )
     
+    # Generate the Markdown content
     local _md_content
     _md_content=$(
         echo "# Health Check Report"
         echo ""
         echo "## Summary"
         echo ""
-        echo "```text"
-        grep -A 6 "================================================" "${_report_file}" | head -n 7 | tail -n +2
-        echo "```"
+        echo "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
         echo ""
 
-        echo "## Issues Detected"
-        echo ""
+        # High-Level Critical Issues
+        echo "--- High-Level Critical Issues ---"
         echo '```text'
-        gsc_log_info "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
+        _critical_high_level=$(
+            printf '%s\n' "${_report_issues}" | grep -E "CRITICAL|ALERT|ERROR" | sed 's/^health_report_[^:]*://' | sort -u
+        )
+        if [[ -n "${_critical_high_level}" ]]; then
+            printf '%s\n' "${_critical_high_level}" | sed -E 's/^(CRITICAL|ALERT|ERROR)(.*)$/\x1b[31m\1\2\x1b[0m/'
+        else
+            echo "No high-level critical issues detected."
+        fi
+        echo '```'
+        echo ""
 
-        _raw_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" "${_tmp_report_output}" | grep -Ev "${_issues_filter}" || true)
-
-        if [[ -n "${_raw_issues}" ]]; then
+        # All Detected Issues (Sorted by Severity)
+        echo "--- All Detected Issues (Sorted by Severity) ---"
+        echo '```text'
+        if [[ -n "${_report_issues}" ]]; then
             # Sorting by severity (CRITICAL/ALERT > ERROR > WARNING > ACTION)
             {
-                printf '%s\n' "${_raw_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[31m\1\x1b[0m/' # Red for CRITICAL/ALERT
-                printf '%s\n' "${_raw_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[31m\1\x1b[0m/' # Red for ERROR
-                printf '%s\n' "${_raw_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[33m\1\x1b[0m/' # Yellow for WARNING
-                printf '%s\n' "${_raw_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[36m\1\x1b[0m/' # Cyan for ACTION
+                printf '%s\n' "${_report_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[31m\1\x1b[0m/' # Red for CRITICAL/ALERT
+                printf '%s\n' "${_report_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[31m\1\x1b[0m/' # Red for ERROR
+                printf '%s\n' "${_report_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[33m\1\x1b[0m/' # Yellow for WARNING
+                printf '%s\n' "${_report_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[36m\1\x1b[0m/' # Cyan for ACTION
             }
         else
             echo "No issues detected."
@@ -282,9 +288,6 @@ if [[ -n "${_report_file}" ]]; then
         echo "## Partition Density Analysis"
         echo ""
         echo '```text'
-        # Page of nodes need to have 900 partitions per node and 500 per node.
-        # If partition size is 1G show decrease of growth changed to 16G
-        
         # Extract relevant data from health_report_partition_details.log
         if [[ -f "${_partition_details_log}" ]]; then
             echo "### Nodes with >1500 Partitions/Node (DANGER/CRITICAL)"
@@ -308,8 +311,10 @@ if [[ -n "${_report_file}" ]]; then
         echo '```'
         echo ""
     )
-    printf '%b\n' "${_md_content}" > "${_report_file}" # Use %b for ANSI escape codes
+    # Write the Markdown content to the report file, preserving ANSI colors
+    printf '%b\n' "${_md_content}" > "${_report_file}"
     rm -f "${_tmp_report_output}"
+
 else
     gsc_log_info "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
 
