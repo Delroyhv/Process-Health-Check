@@ -28,6 +28,8 @@ _override_confirm=""
 _script_name=$(basename "$0")
 _dashboard_dir="dashboards"
 _provisioning_dir="provisioning"
+_customer="unknown"
+_sr_number="unknown"
 _timestamp=$(date +%Y%m%d_%H%M%S)
 _error_log="${_timestamp}.error.log"
 
@@ -42,6 +44,9 @@ Core Options:
   -p, --podman                       Use Podman as the container engine
   -d, --docker                       Use Docker as the container engine
   -D, --dashboard FILE               Add one or more dashboard JSON or archive files
+  -f FILE                            Alias for -D (for compatibility with healthcheck suite)
+  -c, --customer NAME                Specify the customer name (for organizational purposes)
+  -s, --sr-number SR_NUMBER          Specify the Service Request (SR) number
   --url URL                          Download dashboard archive or JSON from URL
   --git URL                          Clone a Git repository containing dashboard JSON files
 
@@ -182,13 +187,19 @@ parse_args() {
         case "$1" in
             -p|--podman) _container_engine="podman"; shift ;;
             -d|--docker) _container_engine="docker"; shift ;;
-            -D|--dashboard)
+            -D|--dashboard|-f)
                 shift
                 while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
                     _dashboards+=("$1")
                     shift
                 done
                 ;;
+            -c|--customer)
+                shift
+                _customer=$(gsc_sanitize_name "$1"); shift ;;
+            -s|--sr-number)
+                shift
+                _sr_number=$(gsc_sanitize_name "$1"); shift ;;
             --url)
                 shift
                 _url="$1"; shift ;;
