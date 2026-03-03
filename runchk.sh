@@ -116,6 +116,12 @@ gsc_log_info "# RUN chk_lshw.sh"
 # Capture Server Model (Consolidated)
 _server_model=$(grep "Server Model (Consolidated):" "${_tmp_report_output}" | tail -n +2 | sed 's/^[[:space:]]*- //g' | sed 's/node(s) with model: //g' | tr '\n' ';' | sed 's/;$//' || echo "N/A")
 
+gsc_log_info "# RUN prep_services_instances.sh"
+"${_script_dir}/prep_services_instances.sh" . > health_report_services_instances.log || true
+# Capture MDGW, S3, DLS counts
+_mdgw_nodes=$(grep "MDGW instances:" health_report_services_instances.log | cut -d: -f2 | xargs || echo "N/A")
+_s3_nodes=$(grep "S3GW instances:" health_report_services_instances.log | cut -d: -f2 | xargs || echo "N/A")
+_dls_nodes=$(grep "DLS instances:" health_report_services_instances.log | cut -d: -f2 | xargs || echo "N/A")
 
 gsc_log_info "# RUN chk_chrony.sh"
 "${_script_dir}/chk_chrony.sh" -d .
@@ -257,6 +263,9 @@ if [[ -n "${_report_file}" ]]; then
         echo "| OS Version | ${_os_version} |"
         echo "| Total Nodes | ${_total_nodes} |"
         echo "| Total Memory | ${_total_memory} |"
+        echo "| Nodes MDGW | ${_mdgw_nodes} |"
+        echo "| Nodes S3 | ${_s3_nodes} |"
+        echo "| Nodes DLS | ${_dls_nodes} |"
         echo "| Server Model | ${_server_model} |"
         echo "| Total Issues Detected | ${_issues_count} |"
         echo "| Start Time | ${_date1} |"
