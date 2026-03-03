@@ -29,15 +29,34 @@ usage() {
 # ── Option parsing ───────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -f) _config_file="$2"; shift 2 ;;
+        -f)
+            if [[ -n "${2-}" ]]; then
+                _config_file="$2"; shift 2
+            else
+                gsc_log_error "-f requires a filename"; exit 1
+            fi
+            ;;
         --full-detail) _full_detail=1; shift ;;
         --no-metrics) _no_metrics=1; shift ;;
-        --report) _report_file="$2"; shift 2 ;;
+        --report)
+            if [[ -n "${2-}" ]]; then
+                _report_file="$2"; shift 2
+            else
+                gsc_log_error "--report requires a filename"; exit 1
+            fi
+            ;;
         -h|--help) usage; exit 0 ;;
         -*) gsc_log_error "Unknown option: $1"; usage; exit 1 ;;
         *) _config_file="$1"; shift ;;
     esac
 done
+
+# Source config file if it exists to get Prometheus details
+if [[ -f "${_config_file}" ]]; then
+    gsc_log_info "Sourcing configuration from ${_config_file}"
+    # shellcheck disable=SC1090
+    . "${_config_file}"
+fi
 
 # ── Setup Output Capture ─────────────────────────────────────────────────────
 _tmp_report_output=$(mktemp)
@@ -133,8 +152,16 @@ gsc_log_info "# RUN chk_services_memory.sh"
 "${_script_dir}/chk_services_memory.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
 
 if [[ "${_no_metrics}" -eq 0 ]]; then
-    gsc_log_info "# RUN chk_metrics.sh"
-    "${_script_dir}/chk_metrics.sh" ${PROM_CMD_PARAM_DAILY:-} 2>&1 | tee -a "${_tmp_report_output}" || true
+    # Prefer values from healthcheck.conf if they were sourced, otherwise fallback to defaults
+    _prom_host="${_prom_server:-${PROM_CMD_PARAM_DAILY:-}}"
+    _prom_p="${_prom_port:-9090}"
+    
+    if [[ -n "${_prom_host}" ]]; then
+        gsc_log_info "# RUN chk_metrics.sh on ${_prom_host}:${_prom_p}"
+        "${_script_dir}/chk_metrics.sh" "${_prom_host}" "${_prom_p}" 2>&1 | tee -a "${_tmp_report_output}" || true
+    else
+        gsc_log_warn "# SKIP chk_metrics.sh: Prometheus host not found in ${_config_file}"
+    fi
 fi
 
 # ── Final Report ─────────────────────────────────────────────────────────────
