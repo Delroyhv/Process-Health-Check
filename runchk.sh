@@ -19,13 +19,14 @@ fi
 _config_file="healthcheck.conf"
 _full_detail=0   # --full-detail : run chk_disk_perf, chk_filesystem, chk_messages
 _no_metrics=0    # --no-metrics  : skip chk_metrics.sh
+_report_file=""  # --report : generate markdown report
 
 # ── Usage ────────────────────────────────────────────────────────────────────
 usage() {
     echo "\
 Run the full HCP Cloud Scale health check suite.
 
-Usage: runchk.sh [-f healthcheck.conf] [--full-detail] [--no-metrics] [-h]
+Usage: runchk.sh [-f healthcheck.conf] [--full-detail] [--no-metrics] [--report report.md] [-h]
 
   -f <file>       Path to healthcheck.conf (default: healthcheck.conf in the
                   current directory).  Also accepted as a bare positional
@@ -39,6 +40,9 @@ Usage: runchk.sh [-f healthcheck.conf] [--full-detail] [--no-metrics] [-h]
 
   --no-metrics    Skip chk_metrics.sh (Prometheus query suite).  Useful when
                   no Prometheus container is running or the port is unknown.
+
+  --report <file> Generate a Markdown report to the specified file.
+                  If set, summary output is redirected to this file.
 
   -h, --help      Show this help and exit.
 "
@@ -54,30 +58,28 @@ while [[ $# -gt 0 ]]; do
             _full_detail=1; shift ;;
         --no-metrics)
             _no_metrics=1; shift ;;
+        --report)
+            [[ -z "${2-}" ]] && { gsc_log_error "--report requires a filename"; exit 1; }
+            _report_file="$2"; shift 2 ;;
         -h|--help)
             usage; exit 0 ;;
         -*)
             gsc_log_error "Unknown option: $1"; usage; exit 1 ;;
         *)
-            # Backward-compatible: bare positional argument is the config file
             _config_file="$1"; shift ;;
     esac
 done
 
-# ── Load config ──────────────────────────────────────────────────────────────
-# Ensure bash's . command finds the file in CWD rather than searching PATH
-[[ "${_config_file}" != */* ]] && _config_file="./${_config_file}"
-if [[ ! -f ${_config_file} ]]; then
-    echo "WARNING: cannot find ${_config_file}. Skipping Prometheus-dependent checks."
-else
-    # shellcheck disable=SC1090
-    . "${_config_file}"
+# If report is enabled, redirect stdout for logging
+if [[ -n "${_report_file}" ]]; then
+    exec > >(tee "${_report_file}") 2>&1
+    gsc_log_info "Generating report: ${_report_file}"
 fi
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 echo "========= RUN ALL CHECKS ========="
 gsc_log_info "========= RUN ALL CHECKS ========="
-gsc_log_info "Config: ${_config_file} | full-detail: ${_full_detail} | no-metrics: ${_no_metrics}"
+gsc_log_info "Config: ${_config_file} | full-detail: ${_full_detail} | no-metrics: ${_no_metrics} | report: ${_report_file:-None}"
 
 # Pre-run bundle self-check
 gsc_log_info "# RUN selfcheck.sh"
@@ -135,8 +137,10 @@ if [[ "${_max_partitions}" -gt 1500 ]]; then
             gnuplot "${_pg_plot}" >> partition_growth_chart.log 2>/dev/null || true
             if [[ -s partition_growth_chart.log ]]; then
                 gsc_log_info "Partition growth charts generated: partition_growth_chart.log"
-                # Only print the Quarterly chart to screen
-                sed -n '/Quarterly Partition Growth/,/Weekly Growth/ { /Weekly Growth/!p }' partition_growth_chart.log
+                # Only print the Quarterly chart to screen unless reporting
+                if [[ -z "${_report_file}" ]]; then
+                    sed -n '/Quarterly Partition Growth/,/Weekly Growth/ { /Weekly Growth/!p }' partition_growth_chart.log
+                fi
             fi
         else
             gsc_log_warn "gnuplot not found; skipping partition growth chart generation."
@@ -209,38 +213,115 @@ gsc_log_info "================================================"
 # Filter out per-node details that have consolidated summary equivalents
 # Silences: 
 #   - Individual node service script modifications
-#   - Individual node NTP source details (but keeps 'X node(s) have only...' summaries)
+#   - Individual node NTP source details (but keeps 'X node(s) have...' summaries)
 #   - Individual node partition distribution counts
-_issues_filter='^health_report_messages\.log:|was modified on node [^ ]+|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source(s) fully reachable|^  [0-9]+ [0-9.]+ \[(CRITICAL|WARNING|DANGER|good)\]'
+_issues_filter='^health_report_messages\.log:|was modified on node [^ ]+|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source(s) fully reachable|^[[:space:]]*[0-9]+ [0-9.]+\s*\[(CRITICAL|WARNING|DANGER|good)\]'
 
 _issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" | wc -l)
-gsc_log_info "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
 
-# Get all raw lines first
-_raw_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" || true)
+if [[ -n "${_report_file}" ]]; then
+    echo "# Health Check Report"
+    echo ""
+    echo "## Summary"
+    echo ""
+    echo "| Metric | Value |"
+    echo "|---|---|"
+    echo "| Customer | ${CUSTOMER:-N/A} |"
+    echo "| SR Number | ${SR_NUMBER:-N/A} |"
+    echo "| Start Time | ${_date1} |"
+    echo "| End Time | ${_date2} |"
+    echo "| Total Run Time | ${_script_run_seconds} sec |"
+    echo "| Total Issues Detected | ${_issues_count} |"
+    echo ""
 
-if [[ -n "${_raw_issues}" ]]; then
-    # Pass 1: CRITICAL and ALERT (Highest Priority)
-    printf '%s\n' "${_raw_issues}" | grep -E "CRITICAL|ALERT" | while IFS= read -r _line; do
-        _msg=$(echo "${_line}" | sed 's/^health_report_[^:]*://')
-        gsc_log_critical "${_msg}"
-    done
+    echo "## Issues Detected"
+    echo ""
+    echo '```text'
 
-    # Pass 2: ERROR
-    printf '%s\n' "${_raw_issues}" | grep "ERROR" | grep -v "CRITICAL" | while IFS= read -r _line; do
-        _msg=$(echo "${_line}" | sed 's/^health_report_[^:]*://')
-        gsc_log_error "${_msg}"
-    done
+    gsc_log_info "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
 
-    # Pass 3: WARNING
-    printf '%s\n' "${_raw_issues}" | grep "WARNING" | grep -vE "CRITICAL|ERROR" | while IFS= read -r _line; do
-        _msg=$(echo "${_line}" | sed 's/^health_report_[^:]*://')
-        gsc_log_warn "${_msg}"
-    done
+    _raw_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" || true)
 
-    # Pass 4: ACTION
-    printf '%s\n' "${_raw_issues}" | grep "ACTION" | grep -vE "CRITICAL|ERROR|WARNING" | while IFS= read -r _line; do
-        _msg=$(echo "${_line}" | sed 's/^health_report_[^:]*://')
-        gsc_log_action "${_msg}"
-    done
+    if [[ -n "${_raw_issues}" ]]; then
+        printf '%s\n' "${_raw_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' | gsc_log_critical_nostdout
+        printf '%s\n' "${_raw_issues}" | grep "ERROR" | grep -v "CRITICAL" | sed 's/^health_report_[^:]*://' | gsc_log_error_nostdout
+        printf '%s\n' "${_raw_issues}" | grep "WARNING" | grep -vE "CRITICAL|ERROR" | sed 's/^health_report_[^:]*://' | gsc_log_warn_nostdout
+        printf '%s\n' "${_raw_issues}" | grep "ACTION" | grep -vE "CRITICAL|ERROR|WARNING" | sed 's/^health_report_[^:]*://' | gsc_log_action_nostdout
+    fi
+
+    echo '```'
+    echo ""
+
+    echo "## Partition Growth Analysis"
+    echo ""
+    echo '```text'
+    # Display all charts to the report file
+    if [[ -f "partition_growth_chart.log" ]]; then
+        cat partition_growth_chart.log
+    else
+        echo "No partition growth charts generated."
+    fi
+    echo '```'
+    echo ""
+
+    echo "## Partition Density Analysis"
+    echo ""
+    echo '```text'
+    # Page of nodes need to have 900 partitions per node and 500 per node.
+    # If partition size is 1G show decrease of growth changed to 16G
+    
+    # Extract relevant data from health_report_partition_details.log
+    local _partition_details_log="health_report_partition_details.log"
+    if [[ -f "${_partition_details_log}" ]]; then
+        echo "### Nodes with >1500 Partitions/Node (DANGER/CRITICAL)"
+        grep -E "^[[:space:]]*[0-9]+ [0-9.]+\s*\[(DANGER|CRITICAL)\]" "${_partition_details_log}" | sed 's/^\s*//' || echo "None"
+        echo ""
+
+        echo "### Nodes approaching 900 Partitions/Node (WARNING or higher)"
+        grep -E "^[[:space:]]*[0-9]+ [0-9.]+\s*\[(WARNING|DANGER|CRITICAL)\]" "${_partition_details_log}" | awk '$1 >= 900' | sed 's/^\s*//' || echo "None"
+        echo ""
+
+        echo "### Nodes approaching 500 Partitions/Node"
+        grep -E "^[[:space:]]*[0-9]+ [0-9.]+\s*\[(good|WARNING|DANGER|CRITICAL)\]" "${_partition_details_log}" | awk '$1 >= 500 && $1 < 900' | sed 's/^\s*//' || echo "None"
+        echo ""
+
+        echo "### Partition Size Impact (e.g., if 1G changed to 16G)"
+        echo "*(Requires additional data sources to analyze historical size impact, not currently calculated.)*"
+        echo ""
+    else
+        echo "Partition details log (health_report_partition_details.log) not found."
+    fi
+    echo '```'
+    echo ""
+
+else
+    gsc_log_info "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
+
+    _raw_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" || true)
+
+    if [[ -n "${_raw_issues}" ]]; then
+        # Pass 1: CRITICAL and ALERT (Highest Priority)
+        printf '%s\n' "${_raw_issues}" | grep -E "CRITICAL|ALERT" | while IFS= read -r _line; do
+            _msg=$(echo "${_line}" | sed 's/^health_report_[^:]*://')
+            gsc_log_critical "${_msg}"
+        done
+
+        # Pass 2: ERROR
+        printf '%s\n' "${_raw_issues}" | grep "ERROR" | grep -v "CRITICAL" | while IFS= read -r _line; do
+            _msg=$(echo "${_line}" | sed 's/^health_report_[^:]*://')
+            gsc_log_error "${_msg}"
+        done
+
+        # Pass 3: WARNING
+        printf '%s\n' "${_raw_issues}" | grep "WARNING" | grep -vE "CRITICAL|ERROR" | while IFS= read -r _line; do
+            _msg=$(echo "${_line}" | sed 's/^health_report_[^:]*://')
+            gsc_log_warn "${_msg}"
+        done
+
+        # Pass 4: ACTION
+        printf '%s\n' "${_raw_issues}" | grep "ACTION" | grep -vE "CRITICAL|ERROR|WARNING" | while IFS= read -r _line; do
+            _msg=$(echo "${_line}" | sed 's/^health_report_[^:]*://')
+            gsc_log_action "${_msg}"
+        done
+    fi
 fi
