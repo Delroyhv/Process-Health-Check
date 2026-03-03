@@ -71,6 +71,20 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ── Initialize Summary Variables ──────────────────────────────────────────────
+_cluster_serial="N/A"
+_cluster_name="N/A"
+_total_nodes="N/A"
+_total_memory="N/A"
+_os_version="N/A"
+_cs_version="N/A"
+_server_model="N/A"
+_mdgw_nodes="N/A"
+_s3_nodes="N/A"
+_dls_nodes="N/A"
+_date2="N/A"
+_script_run_seconds="N/A"
+
 # ── Setup Output Capture ─────────────────────────────────────────────────────
 # We always capture output to a temp file so we can extract summary details
 # like OS version, Node counts, etc. regardless of whether --report is used.
