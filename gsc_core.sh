@@ -340,6 +340,98 @@ gsc_detect_container_runtime() {
   printf '%s\n' "${_runtime}"
 }
 
+gsc_container_rm_if_exists() {
+  # args: engine name
+  local _engine="$1"; shift
+  local _name="$1"; shift || true
+
+  case "${_engine}" in
+    podman)
+      podman rm -f "${_name}" >/dev/null 2>&1 || true
+      ;;
+    docker)
+      docker rm -f "${_name}" >/dev/null 2>&1 || true
+      ;;
+    *)
+      gsc_die "Unknown container engine: ${_engine}"
+      ;;
+  esac
+}
+
+gsc_container_cleanup() {
+  # Usage: gsc_container_cleanup <runtime> <pattern> <override_confirm> [cleanup_volumes] [base_dir]
+  local _runtime="$1"
+  local _pattern="$2"
+  local _override="$3"
+  local _volumes="${4:-0}"
+  local _base_dir="${5:-}"
+
+  local _containers
+  _containers=$("${_runtime}" ps -a --format '{{.Names}}' | grep -E "${_pattern}" || true)
+
+  if [[ -z "${_containers}" ]]; then
+    gsc_log_info "No containers matching '${_pattern}' found to clean up."
+    return 0
+  fi
+
+  if [[ "${_override}" != "y" ]]; then
+    echo "WARNING: This will stop and remove the following containers:"
+    echo "${_containers}"
+    [[ "${_volumes}" -eq 1 ]] && echo "And DELETE their associated data directories."
+
+    local _ans
+    read -p "Are you sure? (y/N): " _ans
+    [[ "${_ans,,}" != "y" ]] && gsc_die "Cleanup cancelled."
+  fi
+
+  local _name
+  for _name in ${_containers}; do
+    gsc_log_info "Stopping and removing container: ${_name}"
+    "${_runtime}" stop "${_name}" >/dev/null 2>&1 || true
+    "${_runtime}" rm -f "${_name}" >/dev/null 2>&1 || true
+
+    # Clear port in healthcheck.conf if it exists in current dir
+    if [[ "${_name}" =~ ^gsc_prometheus_ && -f "./healthcheck.conf" ]]; then
+      sed -i 's/_prom_port="[0-9]*"/_prom_port=""/' "./healthcheck.conf" 2>/dev/null || true
+      gsc_log_info "Cleared _prom_port in ./healthcheck.conf (port is now free)."
+    fi
+
+    if [[ "${_volumes}" -eq 1 ]]; then
+      local _target=""
+      if [[ "${_name}" =~ ^gsc_prometheus_ ]]; then
+         # Extract base_dir from container name or use provided base_dir
+         # Container name format: gsc_prometheus_CUSTOMER_SR_PORT
+         _target="${_base_dir}"
+      fi
+
+      if [[ -n "${_target}" && -d "${_target}" ]]; then
+        gsc_log_info "Deleting data directory: ${_target}"
+        rm -rf "${_target}"
+      fi
+    fi
+  done
+
+  gsc_log_ok "Cleanup complete."
+}
+
+gsc_json_escape() {
+  local _text="$1"
+  printf '"%s"' "$(printf '%s' "${_text}" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+}
+
+gsc_sanitize_name() {
+  # Usage: gsc_sanitize_name <string>
+  # Returns a string safe for Docker/Podman container names: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+  local _s="$1"
+  # Replace invalid chars with underscores
+  _s=$(printf '%s' "${_s}" | sed 's/[^a-zA-Z0-9_.-]/_/g')
+  # Ensure it starts with alphanumeric
+  if [[ ! "${_s}" =~ ^[a-zA-Z0-9] ]]; then
+    _s="gsc_${_s}"
+  fi
+  printf '%s\n' "${_s}"
+}
+
 gsc_collect_container_ports() {
   _gsc_excluded_ports=("${_gsc_reserved_ports[@]}")
   local _line _tok _hp _runtime
