@@ -99,7 +99,7 @@ gsc_log_info "Found ${#_all_lshw_files[@]} lshw file(s); analyzing newest for ea
 # Collect per-node data into arrays for cross-node comparison
 declare -a _nodes
 declare -A _nd_product _nd_cpu _nd_cpucount _nd_mem _nd_dimm_pop _nd_dimm_empty
-declare -A _nd_nics _nd_disk
+declare -A _nd_nics _nd_disk _nd_vendor _nd_serial # Add vendor and serial
 
 for _file in "${_lshw_files[@]}"; do
 
@@ -116,6 +116,9 @@ for _file in "${_lshw_files[@]}"; do
 
     # System product (first product: line = chassis/server model)
     _nd_product["${_node}"]=$(awk '/product:/ && !found { gsub(/^[[:space:]]*product: /,""); found=1; print }' "${_file}")
+    _nd_vendor["${_node}"]=$(awk '/vendor:/ && !found { gsub(/^[[:space:]]*vendor: /,""); found=1; print }' "${_file}")
+    _nd_serial["${_node}"]=$(awk '/serial:/ && !found { gsub(/^[[:space:]]*serial: /,""); found=1; print }' "${_file}")
+
 
     # CPU: model from first Xeon/EPYC/Core product line; count of sockets
     _nd_cpu["${_node}"]=$(awk '/product:.*[Xx]eon|product:.*EPYC|product:.*Core i/ && !found \
@@ -160,11 +163,14 @@ gsc_loga ""
 
 # Cross-node consistency checks
 # Collect unique values for key fields
-declare -A _uniq_cpu _uniq_mem _uniq_nics
+declare -A _uniq_cpu _uniq_mem _uniq_nics _uniq_product _uniq_vendor _uniq_serial
 for _node in "${_nodes[@]}"; do
     _uniq_cpu["${_nd_cpu[${_node}]}"]=1
     _uniq_mem["${_nd_mem[${_node}]}"]=1
     _uniq_nics["${_nd_nics[${_node}]}"]=1
+    _uniq_product["${_nd_product[${_node}]}"]=1
+    _uniq_vendor["${_nd_vendor[${_node}]}"]=1
+    _uniq_serial["${_nd_serial[${_node}]}"]=1
 done
 
 if [[ "${#_uniq_cpu[@]}" -gt 1 ]]; then
@@ -201,6 +207,22 @@ if [[ "${#_uniq_nics[@]}" -gt 1 ]]; then
     gsc_loga "NOTICE:   are equivalent across all nodes. Additional NICs on newer nodes should"
     gsc_loga "NOTICE:   be configured consistently to avoid asymmetric network capacity."
 fi
+
+# Print consolidated server model count
+declare -A _server_model_counts
+for _node in "${_nodes[@]}"; do
+    _model="${_nd_vendor[${_node}]}:${_nd_product[${_node}]}"
+    if [[ -z "${_server_model_counts[${_model}]:-}" ]]; then
+        _server_model_counts["${_model}"]=1
+    else
+        _server_model_counts["${_model}"]=$((_server_model_counts["${_model}"] + 1))
+    fi
+done
+
+gsc_log_info "Server Model (Consolidated):"
+for _model in "${!_server_model_counts[@]}"; do
+    gsc_log_info "  - ${_server_model_counts[${_model}]} node(s) with model: ${_model}"
+done
 
 gsc_loga "INFO: Full lshw output saved to ${_lshw_log}"
 

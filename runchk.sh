@@ -108,11 +108,14 @@ _os_version=$(grep "OS version:" "${_tmp_report_output}" | head -n 1 | cut -d: -
 gsc_log_info "# RUN chk_cluster.sh"
 "${_script_dir}/chk_cluster.sh"
 # Capture Cloud Scale Version
-_cs_version=$(grep "HCP-CS version:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2 | xargs || echo "N/A")
+_cs_version=$(grep "Cloud Scale Version:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 
 
 gsc_log_info "# RUN chk_lshw.sh"
 "${_script_dir}/chk_lshw.sh" -d .
+# Capture Server Model (Consolidated)
+_server_model=$(grep "Server Model (Consolidated):" "${_tmp_report_output}" | tail -n +2 | sed 's/^[[:space:]]*- //g' | sed 's/node(s) with model: //g' | tr '\n' ';' | sed 's/;$//' || echo "N/A")
+
 
 gsc_log_info "# RUN chk_chrony.sh"
 "${_script_dir}/chk_chrony.sh" -d .
@@ -251,13 +254,10 @@ if [[ -n "${_report_file}" ]]; then
         echo "| Cluster Name | ${_cluster_name} |"
         echo "| Cluster Serial | ${_cluster_serial} |"
         echo "| Cloud Scale Version | ${_cs_version} |"
-        echo "| OS Version | ${_os_version} |" # Placeholder - needs to be extracted
-        echo "| Total Nodes | ${_total_nodes} |" # Placeholder - needs to be extracted
+        echo "| OS Version | ${_os_version} |"
+        echo "| Total Nodes | ${_total_nodes} |"
         echo "| Total Memory | ${_total_memory} |"
-        echo "| Nodes MDGW | N/A |" # Placeholder - needs to be extracted
-        echo "| Nodes S3 | N/A |" # Placeholder - needs to be extracted
-        echo "| Nodes DLS | N/A |" # Placeholder - needs to be extracted
-        echo "| Server Model | N/A |" # Placeholder - needs to be extracted
+        echo "| Server Model | ${_server_model} |"
         echo "| Total Issues Detected | ${_issues_count} |"
         echo "| Start Time | ${_date1} |"
         echo "| End Time | ${_date2} |"
