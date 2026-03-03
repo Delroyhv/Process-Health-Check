@@ -19,6 +19,31 @@ fi
 _GSC_CORE_SOURCED=1
 
 # -----------------------------
+# Dependency Checks
+# -----------------------------
+gsc_require() {
+  local _missing=()
+  local _cmd
+  for _cmd in "$@"; do
+    if ! command -v "${_cmd}" >/dev/null 2>&1; then
+      _missing+=("${_cmd}")
+    fi
+  done
+
+  if [[ ${#_missing[@]} -gt 0 ]]; then
+    gsc_log_error "Missing required dependencies: ${_missing[*]}"
+    exit 1
+  fi
+}
+
+gsc_require_root() {
+  if [[ $EUID -ne 0 ]]; then
+    gsc_log_error "This script must be run as root (or with sudo)."
+    exit 1
+  fi
+}
+
+# -----------------------------
 # Strict Mode Helper
 # -----------------------------
 # Call this at the start of any script that sources gsc_core.sh
@@ -59,6 +84,7 @@ gsc_log_error()     { gsc_log ERROR "$*" ;}
 gsc_log_critical()  { gsc_log CRITICAL "$*" ;}
 gsc_log_action()    { gsc_log ACTION "$*" ;}
 gsc_log_ok()        { gsc_log OK "$*" ;}
+gsc_log_success()   { gsc_log OK "$*" ;}
 
 # For logging into a specific file (not stdout/stderr)
 gsc_loga() {
