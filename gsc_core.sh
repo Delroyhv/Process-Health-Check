@@ -128,8 +128,43 @@ gsc_mktempdir() {
 gsc_cleanup() {
   local _d
   for _d in "${_gsc_tmp_dirs[@]:-}"; do
-  rm -rf -- "${_d}" 2>/dev/null || true
+    rm -rf -- "${_d}" 2>/dev/null || true
   done
+  # Wipe sensitive memory
+  _GSC_SUDO_PASS_VAULTED=""
+}
+
+# -----------------------------
+# Secure Sudo Management
+# -----------------------------
+_GSC_SUDO_PASS_VAULTED=""
+
+gsc_prompt_sudo_password() {
+  # If already vaulted, or if sudo works without password, skip
+  if [[ -n "${_GSC_SUDO_PASS_VAULTED}" ]] || sudo -n true 2>/dev/null; then
+    return 0
+  fi
+
+  local _pass
+  printf "Password for sudo: " >&2
+  read -rs _pass
+  printf "\n" >&2
+
+  if [[ -n "${_pass}" ]]; then
+    _GSC_SUDO_PASS_VAULTED=$(gsc_vault_encrypt "${_pass}")
+  fi
+}
+
+gsc_sudo() {
+  # Usage: gsc_sudo <command> [args...]
+  if sudo -n true 2>/dev/null; then
+    sudo "$@"
+  elif [[ -n "${_GSC_SUDO_PASS_VAULTED}" ]]; then
+    gsc_vault_decrypt "${_GSC_SUDO_PASS_VAULTED}" | sudo -S "$@"
+  else
+    # Fallback to interactive prompt if not vaulted
+    sudo "$@"
+  fi
 }
 
 # Script using gsc_core should set this trap (recommended):
