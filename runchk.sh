@@ -90,6 +90,9 @@ gsc_log_info "# RUN selfcheck.sh"
 
 gsc_log_info "# RUN print_cluster_identity_summary.sh"
 "${_script_dir}/print_cluster_identity_summary.sh"
+# Capture cluster identity details
+_cluster_serial=$(grep "Cluster serial" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
+_cluster_name=$(grep "Cluster name" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 
 gsc_log_info "# RUN print_node_memory_summary.sh"
 "${_script_dir}/print_node_memory_summary.sh"
@@ -223,10 +226,6 @@ _issues_filter='^health_report_messages\.log:|was modified on node [^ ]+|: sourc
 _issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" | wc -l)
 
 if [[ -n "${_report_file}" ]]; then
-    # Only capture the summary and issues section for the report
-    # This section starts with "================================================"
-    # and ends after the "ACTION" section.
-
     # Filtered and formatted raw issues as in the prompt
     _report_issues=$(
         grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" || true
@@ -241,12 +240,19 @@ if [[ -n "${_report_file}" ]]; then
         echo ""
         echo "| Metric | Value |"
         echo "|---|---|"
-        echo "| Customer | ${CUSTOMER:-N/A} |"
-        echo "| SR Number | ${SR_NUMBER:-N/A} |"
+        echo "| Cluster Name | ${_cluster_name} |"
+        echo "| Cluster Serial | ${_cluster_serial} |"
+        echo "| Cloud Scale Version | ${VERSION_NUM:-N/A} |"
+        echo "| OS Version | N/A |" # Placeholder - needs to be extracted
+        echo "| Total Nodes | N/A |" # Placeholder - needs to be extracted
+        echo "| Nodes MDGW | N/A |" # Placeholder - needs to be extracted
+        echo "| Nodes S3 | N/A |" # Placeholder - needs to be extracted
+        echo "| Nodes DLS | N/A |" # Placeholder - needs to be extracted
+        echo "| Server Model | N/A |" # Placeholder - needs to be extracted
+        echo "| Total Issues Detected | ${_issues_count} |"
         echo "| Start Time | ${_date1} |"
         echo "| End Time | ${_date2} |"
         echo "| Total Run Time | ${_script_run_seconds} sec |"
-        echo "| Total Issues Detected | ${_issues_count} |"
         echo ""
 
         echo "## Issues Detected"
