@@ -33,7 +33,7 @@ print_node_os_summary() {
 
         os_key="${id} ${version}"
 
-        if [[ -z "${os_counts[$os_key]}" ]]; then
+        if [[ -z "${os_counts[$os_key]:-}" ]]; then
             os_counts[$os_key]=1
         else
             os_counts[$os_key]=$(( ${os_counts[$os_key]:-0} + 1 ))
