@@ -667,6 +667,19 @@ gsc_vault_decrypt() {
 # -----------------------------
 # Timestamps / Date
 # -----------------------------
+gsc_port_in_use() {
+  local _p="$1" _ep
+  for _ep in "${_gsc_excluded_ports[@]}"; do
+    [[ "${_p}" -eq "${_ep}" ]] && return 0
+  done
+  if command -v ss >/dev/null 2>&1; then
+    ss -tuln 2>/dev/null | awk 'NR>1 {print $5}' | grep -qE "(:|\\.)${_p}$" && return 0
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -tuln 2>/dev/null | awk 'NR>2 {print $4}' | grep -qE "(:|\\.)${_p}$" && return 0
+  fi
+  return 1
+}
+
 gsc_get_date_format() {
   # Usage: gsc_get_date_format <epoch_seconds>
   # Output: e.g. 2024-08-19T20:10:30.781Z
