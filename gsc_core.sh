@@ -8,6 +8,7 @@
 #  - dependency checks
 #  - safe tempdirs + cleanup traps
 #  - container engine abstraction (docker/podman)
+#
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -85,7 +86,7 @@ gsc_log_critical()  { gsc_log CRITICAL "$*" ;}
 gsc_log_action()    { gsc_log ACTION "$*" ;}
 gsc_log_ok()        { gsc_log OK "$*" ;}
 gsc_log_success()   { gsc_log OK "$*" ;}
-gsc_log_debug()     { [[ "${_debug:-0}" == "1" || "${_debug:-0}" == "2" ]] && gsc_log INFO "[DEBUG] $*" ;}
+gsc_log_debug()     { if [[ "${_debug:-0}" == "1" || "${_debug:-0}" == "2" ]]; then gsc_log INFO "[DEBUG] $*"; fi; return 0; }
 
 # For logging into a specific file (not stdout/stderr)
 gsc_loga() {
@@ -167,6 +168,11 @@ gsc_is_float() {
 
 gsc_is_json() {
   printf '%s\n' "${1:-}" | jq -e . >/dev/null 2>&1 && printf 'true\n' || printf 'false\n'
+}
+
+gsc_json_escape() {
+  local _text="$1"
+  printf '"%s"' "$(printf '%s' "${_text}" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
 
 # -----------------------------
@@ -309,6 +315,71 @@ gsc_container_rm_if_exists() {
   [[ "$_e" == "podman" ]] && podman rm -f "$_n" >/dev/null 2>&1 || docker rm -f "$_n" >/dev/null 2>&1 || true
 }
 
+gsc_container_cleanup() {
+  # Usage: gsc_container_cleanup <runtime> <pattern> <override_confirm> [cleanup_volumes] [base_dir]
+  local _runtime="$1"
+  local _pattern="$2"
+  local _override="$3"
+  local _volumes="${4:-0}"
+  local _base_dir="${5:-}"
+
+  local _containers
+  _containers=$("${_runtime}" ps -a --format '{{.Names}}' | grep -E "${_pattern}" || true)
+
+  if [[ -z "${_containers}" ]]; then
+    gsc_log_info "No containers matching '${_pattern}' found to clean up."
+    return 0
+  fi
+
+  if [[ "${_override}" != "y" ]]; then
+    echo "WARNING: This will stop and remove the following containers:"
+    echo "${_containers}"
+    [[ "${_volumes}" -eq 1 ]] && echo "And DELETE their associated data directories."
+
+    local _ans
+    read -p "Are you sure? (y/N): " _ans
+    [[ "${_ans,,}" != "y" ]] && gsc_die "Cleanup cancelled."
+  fi
+
+  local _name
+  for _name in ${_containers}; do
+    gsc_log_info "Stopping and removing container: ${_name}"
+    "${_runtime}" stop "${_name}" >/dev/null 2>&1 || true
+    "${_runtime}" rm -f "${_name}" >/dev/null 2>&1 || true
+
+    # Clear port in healthcheck.conf if it exists in current dir
+    if [[ "${_name}" =~ ^gsc_prometheus_ && -f "./healthcheck.conf" ]]; then
+      sed -i 's/_prom_port="[0-9]*"/_prom_port=""/' "./healthcheck.conf" 2>/dev/null || true
+      gsc_log_info "Cleared _prom_port in ./healthcheck.conf (port is now free)."
+    fi
+
+    if [[ "${_volumes}" -eq 1 ]]; then
+      local _target=""
+      if [[ "${_name}" =~ ^gsc_prometheus_ ]]; then
+         _target="${_base_dir}"
+      fi
+
+      if [[ -n "${_target}" && -d "${_target}" ]]; then
+        gsc_log_info "Deleting data directory: ${_target}"
+        rm -rf "${_target}"
+      fi
+    fi
+  done
+
+  gsc_log_ok "Cleanup complete."
+}
+
+gsc_sanitize_name() {
+  # Usage: gsc_sanitize_name <string>
+  # Returns a string safe for Docker/Podman container names: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+  local _s="$1"
+  _s=$(printf '%s' "${_s}" | sed 's/[^a-zA-Z0-9_.-]/_/g')
+  if [[ ! "${_s}" =~ ^[a-zA-Z0-9] ]]; then
+    _s="gsc_${_s}"
+  fi
+  printf '%s\n' "${_s}"
+}
+
 # -----------------------------
 # Math / Comparison
 # -----------------------------
@@ -383,6 +454,51 @@ gsc_get_date_format() {
 gsc_timestamp() { date +%Y-%m-%dT%H:%M:%S%z; }
 
 # -----------------------------
+# Container Port Helpers
+# -----------------------------
+_gsc_reserved_ports=(9093 9100 8080 9115 9116 9104)
+_gsc_excluded_ports=()
+
+gsc_collect_container_ports() {
+  _gsc_excluded_ports=("${_gsc_reserved_ports[@]}")
+  local _line _tok _hp _runtime
+
+  for _runtime in podman docker; do
+    if command -v "${_runtime}" >/dev/null 2>&1; then
+      while read -r _line; do
+        [[ -z "${_line}" ]] && continue
+        local _mappings="${_line//,/ }"
+        for _tok in ${_mappings}; do
+          if [[ "${_tok}" == *"->"* ]]; then
+            _hp="${_tok%%->*}"; _hp="${_hp##*:}"
+            _gsc_excluded_ports+=("${_hp}")
+          elif [[ "${_tok}" == *"/tcp" ]]; then
+            _hp="${_tok%%/*}"
+            _gsc_excluded_ports+=("${_hp}")
+          fi
+        done
+      done < <("${_runtime}" ps --format '{{.Ports}}' 2>/dev/null || true)
+    fi
+  done
+
+  if ((${#_gsc_excluded_ports[@]} > 1)); then
+    local -A _seen=(); local _uniq=(); local _p
+    for _p in "${_gsc_excluded_ports[@]}"; do
+      if [[ -z "${_seen[${_p}]:-}" ]]; then _uniq+=("${_p}"); _seen["${_p}"]=1; fi
+    done
+    _gsc_excluded_ports=("${_uniq[@]}")
+  fi
+}
+
+gsc_port_in_use() {
+  local _p="$1" _ep
+  for _ep in "${_gsc_excluded_ports[@]:-}"; do [[ "${_p}" -eq "${_ep}" ]] && return 0; done
+  if command -v ss >/dev/null 2>&1; then ss -tuln 2>/dev/null | awk 'NR>1 {print $5}' | grep -qE "(:|\\.)${_p}$" && return 0
+  elif command -v netstat >/dev/null 2>&1; then netstat -tuln 2>/dev/null | awk 'NR>2 {print $4}' | grep -qE "(:|\\.)${_p}$" && return 0; fi
+  return 1
+}
+
+# -----------------------------
 # Space estimation helpers
 # -----------------------------
 gsc_estimate_uncompressed_size() {
@@ -408,6 +524,17 @@ gsc_print_space_estimate() {
   read -r _dev _total _used _avail _use _mnt <<<"${_df_line}"
   local _pct=$(( 100 * (_avail - _size) / _total ))
   gsc_log_info "Estimate for ${_archive}: size≈$((_size/1048576)) MiB, free_after≈~${_pct}%."
+}
+
+# -----------------------------
+# Progress tool detection
+# -----------------------------
+_have_pv=0
+_have_progress=0
+gsc_detect_progress_tools() {
+  _have_pv=0; _have_progress=0
+  if command -v pv >/dev/null 2>&1; then _have_pv=1; fi
+  if command -v progress >/dev/null 2>&1; then _have_progress=1; fi
 }
 
 # -----------------------------
@@ -437,8 +564,12 @@ handleBasicOptions() {
 }
 createDir() { [[ ! -d "${_dir_name}" ]] && mkdir -p "${_dir_name}" || true; }
 hcpcs_json_body_from_file() { local _file="$1"; [[ -r "${_file}" ]] || return 1; sed -n '/^[[:space:]]*[{[]/,$p' "${_file}"; }
+hcpcs_json_is_valid() { local _file="$1"; [[ -s "${_file}" ]] || return 1; hcpcs_json_body_from_file "${_file}" | jq empty >/dev/null 2>&1; }
 
 # Auto-setup _log_file_name
 if [[ -z "${_log_file_name:-}" ]]; then
   _gsc_script_base="$(basename "${0:-gsc_script}")"; _log_file_name="${_gsc_script_base%.*}.log"
+fi
+if [[ -n "${_log_file_name:-}" && -e "${_log_file_name}" ]]; then
+  gsc_rotate_log "${_log_file_name}" 2
 fi
