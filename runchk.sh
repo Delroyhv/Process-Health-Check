@@ -73,7 +73,9 @@ done
 
 # If report is enabled, redirect stdout for logging
 if [[ -n "${_report_file}" ]]; then
-    exec > >(tee "${_report_file}") 2>&1
+    # Create a temporary file to capture all output
+    _tmp_report_output=$(mktemp)
+    exec > >(tee "${_tmp_report_output}") 2>&1
     gsc_log_info "Generating report: ${_report_file}"
 fi
 
@@ -117,10 +119,10 @@ gsc_log_info "# RUN chk_partInfo.sh"
 "${_script_dir}/chk_partInfo.sh" -d .
 
 gsc_log_info "# RUN get_partition_details.sh"
-"${_script_dir}/get_partition_details.sh" . | tee health_report_partition_details.log
+"${_script_dir}/get_partition_details.sh" . | tee "${_partition_details_log}"
 
 # ── Partition Growth Chart (conditional) ─────────────────────────────────────
-_max_partitions=$(grep -E "^[[:space:]]*[0-9]+ [0-9.]+" health_report_partition_details.log | awk '{print $1}' | sort -rn | head -n 1 || echo 0)
+_max_partitions=$(grep -E "^[[:space:]]*[0-9]+ [0-9.]+" "${_partition_details_log}" | awk '{print $1}' | sort -rn | head -n 1 || echo 0)
 if [[ "${_max_partitions}" -gt 1500 ]]; then
     gsc_log_info "High partition count detected (${_max_partitions}). Generating growth chart..."
     _part_json="supportLogs/partitionMap.json"
@@ -221,92 +223,93 @@ _issues_filter='^health_report_messages\.log:|was modified on node [^ ]+|: sourc
 _issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" | wc -l)
 
 if [[ -n "${_report_file}" ]]; then
-    echo "# Health Check Report"
-    echo ""
-    echo "## Summary"
-    echo ""
-    echo "| Metric | Value |"
-    echo "|---|---|"
-    echo "| Customer | ${CUSTOMER:-N/A} |"
-    echo "| SR Number | ${SR_NUMBER:-N/A} |"
-    echo "| Start Time | ${_date1} |"
-    echo "| End Time | ${_date2} |"
-    echo "| Total Run Time | ${_script_run_seconds} sec |"
-    echo "| Total Issues Detected | ${_issues_count} |"
-    echo ""
-
-    echo "## Issues Detected"
-    echo ""
-    echo '```text'
-
-    # Concise summary of high-priority issues
-    gsc_log_info "--- High-Level Critical Issues ---"
-    _critical_issues=$(grep -E "CRITICAL|ALERT|ERROR" health_report*.log | grep -Ev "${_issues_filter}" || true)
-    if [[ -n "${_critical_issues}" ]]; then
-        printf '%s\n' "${_critical_issues}" | sed 's/^health_report_[^:]*://' | sort -u
+    # Only capture the summary and issues section for the report
+    _summary_start_line=$(grep -n "================================================" "${_tmp_report_output}" | head -n 1 | cut -d: -f1)
+    if [[ -n "${_summary_start_line}" ]]; then
+        sed -n "${_summary_start_line},\$p" "${_tmp_report_output}" | head -n -1 > "${_report_file}"
     else
-        echo "No critical issues detected."
+        gsc_log_warn "Could not find report summary start line. Generating full log report."
+        cat "${_tmp_report_output}" > "${_report_file}"
     fi
-    echo ""
 
-    gsc_log_info "--- All Detected Issues (Sorted by Severity) ---"
-    _all_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log | grep -Ev "${_issues_filter}" || true)
-    if [[ -n "${_all_issues}" ]]; then
-        # Sorting by severity (CRITICAL/ALERT > ERROR > WARNING > ACTION)
-        {
-            printf '%s\n' "${_all_issues}" | grep -E "CRITICAL|ALERT"
-            printf '%s\n' "${_all_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT"
-            printf '%s\n' "${_all_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR"
-            printf '%s\n' "${_all_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING"
-        } | sed 's/^health_report_[^:]*://'
-    else
-        echo "No issues detected."
-    fi
-    echo '```'
-    echo ""
-
-    echo "## Partition Growth Analysis"
-    echo ""
-    echo '```text'
-    # Display all charts to the report file
-    if [[ -f "partition_growth_chart.log" ]]; then
-        cat partition_growth_chart.log
-    else
-        echo "No partition growth charts generated."
-    fi
-    echo '```'
-    echo ""
-
-    echo "## Partition Density Analysis"
-    echo ""
-    echo '```text'
-    # Page of nodes need to have 900 partitions per node and 500 per node.
-    # If partition size is 1G show decrease of growth changed to 16G
+    # Convert the raw log output to Markdown with colored severity
+    gsc_log_info "Converting raw output to Markdown..."
     
-    # Extract relevant data from health_report_partition_details.log
-    local _partition_details_log="health_report_partition_details.log"
-    if [[ -f "${_partition_details_log}" ]]; then
-        echo "### Nodes with >1500 Partitions/Node (DANGER/CRITICAL)"
-        grep -E "^[[:space:]]*[0-9]+ [0-9.]+\s*\[(DANGER|CRITICAL)\]" "${_partition_details_log}" | sed 's/^\s*//' || echo "None"
+    local _md_content
+    _md_content=$(
+        echo "# Health Check Report"
+        echo ""
+        echo "## Summary"
+        echo ""
+        echo "```text"
+        grep -A 6 "================================================" "${_report_file}" | head -n 7 | tail -n +2
+        echo "```"
         echo ""
 
-        echo "### Nodes approaching 900 Partitions/Node (WARNING or higher)"
-        grep -E "^[[:space:]]*[0-9]+ [0-9.]+\s*\[(WARNING|DANGER|CRITICAL)\]" "${_partition_details_log}" | awk '$1 >= 900' | sed 's/^\s*//' || echo "None"
+        echo "## Issues Detected"
+        echo ""
+        echo '```text'
+        gsc_log_info "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
+
+        _raw_issues=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" "${_tmp_report_output}" | grep -Ev "${_issues_filter}" || true)
+
+        if [[ -n "${_raw_issues}" ]]; then
+            # Sorting by severity (CRITICAL/ALERT > ERROR > WARNING > ACTION)
+            {
+                printf '%s\n' "${_raw_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[31m\1\x1b[0m/' # Red for CRITICAL/ALERT
+                printf '%s\n' "${_raw_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[31m\1\x1b[0m/' # Red for ERROR
+                printf '%s\n' "${_raw_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[33m\1\x1b[0m/' # Yellow for WARNING
+                printf '%s\n' "${_raw_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING" | sed 's/^health_report_[^:]*://' | sed -E 's/^(.*)$/\x1b[36m\1\x1b[0m/' # Cyan for ACTION
+            }
+        else
+            echo "No issues detected."
+        fi
+        echo '```'
         echo ""
 
-        echo "### Nodes approaching 500 Partitions/Node"
-        grep -E "^[[:space:]]*[0-9]+ [0-9.]+" "${_partition_details_log}" | awk '$1 >= 500 && $1 < 900 && ($0 ~ "\\[(good|WARNING|DANGER|CRITICAL)\\]") {print $0}' | sed 's/^\s*//' || echo "None"
+        echo "## Partition Growth Analysis"
+        echo ""
+        echo '```text'
+        # Display all charts to the report file
+        if [[ -f "partition_growth_chart.log" ]]; then
+            cat partition_growth_chart.log
+        else
+            echo "No partition growth charts generated."
+        fi
+        echo '```'
         echo ""
 
-        echo "### Partition Size Impact (e.g., if 1G changed to 16G)"
-        echo "*(Requires additional data sources to analyze historical size impact, not currently calculated.)*"
+        echo "## Partition Density Analysis"
         echo ""
-    else
-        echo "Partition details log (health_report_partition_details.log) not found."
-    fi
-    echo '```'
-    echo ""
+        echo '```text'
+        # Page of nodes need to have 900 partitions per node and 500 per node.
+        # If partition size is 1G show decrease of growth changed to 16G
+        
+        # Extract relevant data from health_report_partition_details.log
+        if [[ -f "${_partition_details_log}" ]]; then
+            echo "### Nodes with >1500 Partitions/Node (DANGER/CRITICAL)"
+            grep -E "^[[:space:]]*[0-9]+ [0-9.]+\s*\[(DANGER|CRITICAL)\]" "${_partition_details_log}" | sed 's/^\s*//' || echo "None"
+            echo ""
 
+            echo "### Nodes approaching 900 Partitions/Node (WARNING or higher)"
+            grep -E "^[[:space:]]*[0-9]+ [0-9.]+\s*\[(WARNING|DANGER|CRITICAL)\]" "${_partition_details_log}" | awk '$1 >= 900' | sed 's/^\s*//' || echo "None"
+            echo ""
+
+            echo "### Nodes approaching 500 Partitions/Node"
+            grep -E "^[[:space:]]*[0-9]+ [0-9.]+" "${_partition_details_log}" | awk '$1 >= 500 && $1 < 900 && ($0 ~ "\\[(good|WARNING|DANGER|CRITICAL)\\]") {print $0}' | sed 's/^\s*//' || echo "None"
+            echo ""
+
+            echo "### Partition Size Impact (e.g., if 1G changed to 16G)"
+            echo "*(Requires additional data sources to analyze historical size impact, not currently calculated.)*"
+            echo ""
+        else
+            echo "Partition details log (health_report_partition_details.log) not found."
+        fi
+        echo '```'
+        echo ""
+    )
+    printf '%b\n' "${_md_content}" > "${_report_file}" # Use %b for ANSI escape codes
+    rm -f "${_tmp_report_output}"
 else
     gsc_log_info "Detected the following ${_issues_count} issue(s) (sorted by severity; refer to logs for node-level details):"
 
