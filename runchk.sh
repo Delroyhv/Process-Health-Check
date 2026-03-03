@@ -118,7 +118,26 @@ if [[ "${_max_partitions}" -gt 1500 ]]; then
         if command -v gnuplot >/dev/null 2>&1; then
             "${_pg_bin}" -f "${_part_json}" -a > partition_growth_chart.log 2>/dev/null || true
             gnuplot "${_pg_plot}" >> partition_growth_chart.log 2>/dev/null || true
+            if [[ -s partition_growth_chart.log ]]; then
+                gsc_log_info "Partition growth charts and rates generated: partition_growth_chart.log"
+                # If not reporting, print the summaries to the screen
+                if [[ -z "${_report_file}" ]]; then
+                    sed -n '/--- Yearly/,/Grand Total/p' partition_growth_chart.log
+                fi
+            fi
+        else
+            gsc_log_warn "gnuplot not found; skipping partition growth chart generation."
+            # Still run the binary to get text-based rates if gnuplot is missing
+            "${_pg_bin}" -f "${_part_json}" -a > partition_growth_chart.log 2>/dev/null || true
+            if [[ -s partition_growth_chart.log ]]; then
+                gsc_log_info "Partition growth rates generated (no charts): partition_growth_chart.log"
+                if [[ -z "${_report_file}" ]]; then
+                    sed -n '/--- Yearly/,/Grand Total/p' partition_growth_chart.log
+                fi
+            fi
         fi
+    else
+        gsc_log_warn "Missing partition_growth artifacts or JSON; skipping growth rate calculation."
     fi
 fi
 

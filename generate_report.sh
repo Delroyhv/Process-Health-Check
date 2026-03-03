@@ -46,7 +46,7 @@ _issues_filter='^health_report_messages\.log:|was modified on node [^ ]+|: sourc
 _issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" | wc -l || echo 0)
 
 # Metrics specific summary
-_metric_logs=$(ls health_report_metrics_*.log 2>/dev/null)
+_metric_logs=$(ls health_report_metrics_*.log 2>/dev/null || true)
 _m_critical=0
 _m_error=0
 _m_warning=0
