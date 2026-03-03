@@ -295,7 +295,7 @@ if [[ -n "${_report_file}" ]]; then
         echo ""
 
         echo "### Nodes approaching 500 Partitions/Node"
-        grep -E "^[[:space:]]*[0-9]+ [0-9.]+\s*\[(good|WARNING|DANGER|CRITICAL)\]" "${_partition_details_log}" | awk '$1 >= 500 && $1 < 900' | sed 's/^\s*//' || echo "None"
+        grep -E "^[[:space:]]*[0-9]+ [0-9.]+" "${_partition_details_log}" | awk '$1 >= 500 && $1 < 900 && ($0 ~ "\\[(good|WARNING|DANGER|CRITICAL)\\]") {print $0}' | sed 's/^\s*//' || echo "None"
         echo ""
 
         echo "### Partition Size Impact (e.g., if 1G changed to 16G)"
