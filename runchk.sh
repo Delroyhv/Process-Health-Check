@@ -71,12 +71,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# If report is enabled, redirect stdout for logging
+# ── Setup Output Capture ─────────────────────────────────────────────────────
+# We always capture output to a temp file so we can extract summary details
+# like OS version, Node counts, etc. regardless of whether --report is used.
+_tmp_report_output=$(mktemp)
+gsc_add_tmp_dir "$(dirname "${_tmp_report_output}")"
+
 if [[ -n "${_report_file}" ]]; then
-    # Create a temporary file to capture all output
-    _tmp_report_output=$(mktemp)
     exec > >(tee "${_tmp_report_output}") 2>&1
     gsc_log_info "Generating report: ${_report_file}"
+else
+    # Capture all stdout/stderr to the temp file in the background
+    exec > >(tee "${_tmp_report_output}") 2>&1
 fi
 
 # ── Run ──────────────────────────────────────────────────────────────────────
@@ -84,35 +90,34 @@ echo "========= RUN ALL CHECKS ========="
 gsc_log_info "========= RUN ALL CHECKS ========="
 gsc_log_info "Config: ${_config_file} | full-detail: ${_full_detail} | no-metrics: ${_no_metrics} | report: ${_report_file:-None}"
 
-# Pre-run bundle self-check
 gsc_log_info "# RUN selfcheck.sh"
-"${_script_dir}/selfcheck.sh"
+"${_script_dir}/selfcheck.sh" || true
 
 gsc_log_info "# RUN print_cluster_identity_summary.sh"
-"${_script_dir}/print_cluster_identity_summary.sh"
+"${_script_dir}/print_cluster_identity_summary.sh" || true
 # Capture cluster identity details
 _cluster_serial=$(grep "Cluster serial (from cluster.serial):" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 _cluster_name=$(grep "Cluster name   (from cluster.name):" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 
 gsc_log_info "# RUN print_node_memory_summary.sh"
-"${_script_dir}/print_node_memory_summary.sh"
+"${_script_dir}/print_node_memory_summary.sh" || true
 # Capture total nodes and memory
 _total_nodes=$(grep "Total node count:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2 | xargs || echo "N/A")
 _total_memory=$(grep "Total memory:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2 | xargs || echo "N/A")
 
 gsc_log_info "# RUN print_node_os_summary.sh"
-"${_script_dir}/print_node_os_summary.sh"
+"${_script_dir}/print_node_os_summary.sh" || true
 # Capture OS Version (first unique OS detected)
 _os_version=$(grep "OS version:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 
 gsc_log_info "# RUN chk_cluster.sh"
-"${_script_dir}/chk_cluster.sh"
+"${_script_dir}/chk_cluster.sh" || true
 # Capture Cloud Scale Version
 _cs_version=$(grep "Cloud Scale Version:" "${_tmp_report_output}" | head -n 1 | cut -d: -f2- | xargs || echo "N/A")
 
 
 gsc_log_info "# RUN chk_lshw.sh"
-"${_script_dir}/chk_lshw.sh" -d .
+"${_script_dir}/chk_lshw.sh" -d . || true
 # Capture Server Model (Consolidated)
 _server_model=$(grep "Server Model (Consolidated):" "${_tmp_report_output}" | tail -n +2 | sed 's/^[[:space:]]*- //g' | sed 's/node(s) with model: //g' | tr '\n' ';' | sed 's/;$//' || echo "N/A")
 

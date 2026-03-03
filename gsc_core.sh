@@ -91,6 +91,152 @@ gsc_loga() {
   printf '%s\n' "$*" >> "${_output_file}"
 }
 
+# -----------------------------
+# JSON helpers
+# -----------------------------
+gsc_build_json_from_matches() {
+  # Usage: gsc_build_json_from_matches <search_dir> <iname_glob> <out_json> [mode]
+  # mode: "array" (default) -> slurp all matches into JSON array
+  #  "one"  -> pretty-print first match only
+  local _search_dir="$1"
+  local _glob="$2"
+  local _out_json="$3"
+  local _mode="${4:-array}"
+
+  local -a _files=()
+  mapfile -t _files < <(find "${_search_dir}" -type f -iname "${_glob}" | sort)
+
+  if [[ ${#_files[@]} -eq 0 ]]; then
+    gsc_log_warn "No files matched: ${_search_dir}/**/${_glob}"
+    return 1
+  fi
+
+  gsc_log_info "Building ${_out_json} from ${#_files[@]} file(s) matching: ${_glob}"
+
+  if [[ "${_mode}" == "one" ]]; then
+    jq -S . "${_files[0]}" > "${_out_json}"
+    gsc_log_success "Wrote ${_out_json} (from first match: ${_files[0]})"
+    return 0
+  fi
+
+  # Combine many JSON docs into an array
+  jq -S -s '.' "${_files[@]}" > "${_out_json}"
+  gsc_log_success "Wrote ${_out_json} (array of ${#_files[@]} documents)"
+  return 0
+}
+
+gsc_is_empty() {
+  local _val="${1:-}"
+  if [[ -z "${_val}" || "${_val}" == "null" ]]; then
+    printf 'true\n'
+  else
+    printf 'false\n'
+  fi
+}
+
+gsc_is_number() {
+  local _val="${1:-}"
+  if [[ "${_val}" =~ ^-?[0-9]+$ ]]; then printf 'true\n'; else printf 'false\n'; fi
+}
+
+gsc_is_float() {
+  local _val="${1:-}"
+  if [[ "${_val}" =~ ^-?[0-9]+(\.[0-9]+)?$ ]]; then printf 'true\n'; else printf 'false\n'; fi
+}
+
+gsc_is_json() {
+  printf '%s\n' "${1:-}" | jq -e . >/dev/null 2>&1 && printf 'true\n' || printf 'false\n'
+}
+
+# -----------------------------
+# Partition artifacts (map/state/seed) prep + parse
+# -----------------------------
+gsc_prep_partition_artifacts_and_parse() {
+  # Usage:
+  #   gsc_prep_partition_artifacts_and_parse [search_dir] [support_dir]
+  #
+  # Creates (when matches exist):
+  #   <support_dir>/partitionStateProperties.txt  from *seed*.json (pretty JSON per file)
+  #   <support_dir>/partitionMap.json            from *map*.json   (slurped array)
+  #   <support_dir>/partitionState.json          from *state*.json (slurped array)
+  #
+  # Then runs:
+  #   hcpcs_parse_partitions_mp.sh (if present) or hcpcs_parse_partitions_map.sh on partitionMap.json
+  #   hcpcs_parse_partitions_state.sh on partitionState.json
+
+  local _search_dir="${1:-cluster_triage}"
+  local _support_dir="${2:-supportLogs}"
+  local _bundle_dir
+  _bundle_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  gsc_require jq find
+
+  [[ -d "${_search_dir}" ]] || {
+    gsc_log_warn "Directory not found: ${_search_dir}"
+    return 1
+  }
+
+  mkdir -p "${_support_dir}"
+
+  local _seed_out="${_support_dir}/partitionStateProperties.txt"
+  local _map_out="${_support_dir}/partitionMap.json"
+  local _state_out="${_support_dir}/partitionState.json"
+
+  # ---- SEED properties ------------------------------------------------------
+  local -a _seed_files=()
+  mapfile -t _seed_files < <(find "${_search_dir}" -type f -iname "*seed*.json" | sort)
+  if [[ ${#_seed_files[@]} -gt 0 ]]; then
+    : > "${_seed_out}"
+    gsc_log_info "Building ${_seed_out} from ${#_seed_files[@]} file(s) matching: *seed*.json"
+    local _f
+    for _f in "${_seed_files[@]}"; do
+      {
+        printf "\n=========================================================\n"
+        printf "FILE: %s\n" "${_f}"
+        printf "=========================================================\n"
+        jq -S . "${_f}"
+      } >> "${_seed_out}"
+    done
+    gsc_log_success "Wrote ${_seed_out}"
+  else
+    gsc_log_info "No seed files matched (*seed*.json); skipping ${_seed_out}"
+  fi
+
+  # ---- Map JSON -------------------------------------------------------------
+  if gsc_build_json_from_matches "${_search_dir}" "*map*.json" "${_map_out}" "array"; then
+    # Rotate/retain parser log (keep 2 backups) before overwriting
+    gsc_rotate_log "${_support_dir}/partitionMap_parse.log" 2
+
+    if [[ -x "${_bundle_dir}/hcpcs_parse_partitions_mp.sh" ]]; then
+      gsc_log_info "Running: ${_bundle_dir}/hcpcs_parse_partitions_mp.sh -f ${_map_out}"
+      "${_bundle_dir}/hcpcs_parse_partitions_mp.sh" -f "${_map_out}" | tee "${_support_dir}/partitionMap_parse.log"
+      gsc_log_success "Parsed partition map (mp)"
+    elif [[ -x "${_bundle_dir}/hcpcs_parse_partitions_map.sh" ]]; then
+      gsc_log_info "Running: ${_bundle_dir}/hcpcs_parse_partitions_map.sh -f ${_map_out}"
+      "${_bundle_dir}/hcpcs_parse_partitions_map.sh" -f "${_map_out}" | tee "${_support_dir}/partitionMap_parse.log"
+      gsc_log_success "Parsed partition map"
+    else
+      gsc_log_warn "Missing or not executable: ${_bundle_dir}/hcpcs_parse_partitions_map.sh"
+    fi
+  fi
+
+  # ---- State JSON -----------------------------------------------------------
+  if gsc_build_json_from_matches "${_search_dir}" "*state*.json" "${_state_out}" "array"; then
+    # Rotate/retain parser log (keep 2 backups) before overwriting
+    gsc_rotate_log "${_support_dir}/partitionState_parse.log" 2
+
+    if [[ -x "${_bundle_dir}/hcpcs_parse_partitions_state.sh" ]]; then
+      gsc_log_info "Running: ${_bundle_dir}/hcpcs_parse_partitions_state.sh -f ${_state_out}"
+      "${_bundle_dir}/hcpcs_parse_partitions_state.sh" -f "${_state_out}" | tee "${_support_dir}/partitionState_parse.log"
+      gsc_log_success "Parsed partition state"
+    else
+      gsc_log_warn "Missing or not executable: ${_bundle_dir}/hcpcs_parse_partitions_state.sh"
+    fi
+  fi
+
+  gsc_log_success "Partition artifacts prepared under: ${_support_dir}"
+}
+
 gsc_rotate_log() {
   local _log_file="$1"
   if [[ -f "${_log_file}" ]]; then
