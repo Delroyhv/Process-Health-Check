@@ -1,0 +1,2706 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 3,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [
+        "cloudscale"
+      ],
+      "targetBlank": false,
+      "title": "Related Dashboards",
+      "tooltip": "",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 119,
+      "panels": [],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": "Bucket Stats",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "description": "Total number of buckets existing on the system",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": -2,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 3,
+        "x": 0,
+        "y": 1
+      },
+      "hideTimeOverride": true,
+      "id": 28,
+      "maxDataPoints": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(metadata_total_objects_per_bucket{})",
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "1m",
+      "title": "Total Buckets",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "seriesToRows",
+            "reducers": [
+              "count"
+            ]
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "system Bucket",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "Field"
+              ],
+              "reducer": "count"
+            }
+          }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "count"
+            ]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "index": 0,
+                  "text": "-"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Used Capacity"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 129
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Objects"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 137
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg Object Size"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 177
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Buckets"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 342
+              },
+              {
+                "id": "mappings",
+                "value": []
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Added in 24h"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 115
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Obj count change in 24h"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 226
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Capacity change in 24h"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 202
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 21,
+        "x": 3,
+        "y": 1
+      },
+      "id": 235,
+      "maxDataPoints": 1,
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Obj count change in 24h"
+          }
+        ]
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "exemplar": true,
+          "expr": "sum by (bucket)(metadata_total_bytes_per_bucket{})",
+          "format": "table",
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "exemplar": true,
+          "expr": "sum by (bucket)(metadata_total_objects_per_bucket{})",
+          "format": "table",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "exemplar": true,
+          "expr": "sum by (bucket)(metadata_total_bytes_per_bucket{}) / sum by (bucket)(metadata_total_objects_per_bucket{})",
+          "format": "table",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "(sum by (bucket)(metadata_total_objects_per_bucket{})) -  (sum by (bucket)(metadata_total_objects_per_bucket{} offset 24h))",
+          "format": "table",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "H"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "(sum by (bucket)(metadata_total_bytes_per_bucket{})) -  (sum by (bucket)(metadata_total_bytes_per_bucket{} offset 24h))",
+          "format": "table",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "D"
+        }
+      ],
+      "timeFrom": "1m",
+      "title": "Current Stats per bucket",
+      "transformations": [
+        {
+          "id": "seriesToColumns",
+          "options": {
+            "byField": "bucket"
+          }
+        },
+        {
+          "disabled": true,
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "seriesToRows",
+            "reducers": [
+              "last"
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true
+            },
+            "indexByName": {
+              "Time 1": 1,
+              "Time 2": 3,
+              "Time 3": 5,
+              "Time 4": 9,
+              "Time 5": 7,
+              "Value #A": 2,
+              "Value #B": 4,
+              "Value #C": 10,
+              "Value #D": 6,
+              "Value #H": 8,
+              "bucket": 0
+            },
+            "renameByName": {
+              "Difference": "Delta",
+              "Field": "Bucket Name",
+              "Last": "Capacity",
+              "Value #A": "Used Capacity",
+              "Value #B": "Objects",
+              "Value #C": "Avg Object Size",
+              "Value #D": "Capacity change in 24h",
+              "Value #E": "PUT Throughput",
+              "Value #G": "GET Throughput",
+              "Value #H": "Obj count change in 24h",
+              "bucket": "Buckets"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "PUT Throughput"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "description": "Which buckets were created during reporting period",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 3,
+        "x": 0,
+        "y": 6
+      },
+      "id": 227,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {
+          "titleSize": 20,
+          "valueSize": 30
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "exemplar": true,
+          "expr": "sum by (bucket)(http_s3_servlet_requests_per_bucket{operation=\"S3CreateBucketOperation\"})",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "New Buckets",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "seriesToRows",
+            "reducers": [
+              "changeCount"
+            ]
+          }
+        },
+        {
+          "id": "filterByValue",
+          "options": {
+            "filters": [
+              {
+                "config": {
+                  "id": "lower",
+                  "options": {
+                    "value": 1
+                  }
+                },
+                "fieldName": "Change Count"
+              }
+            ],
+            "match": "any",
+            "type": "exclude"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Change Count": false,
+              "Field": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Change Count": "",
+              "Field": " "
+            }
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "description": "The number of small buckets: less than 100 objects and less that 1GB",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "index": 0,
+                  "text": "0"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "max": -2,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 11
+      },
+      "hideTimeOverride": true,
+      "id": 228,
+      "maxDataPoints": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {
+          "titleSize": 20,
+          "valueSize": 30
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "count ((sum by (bucket) (metadata_total_objects_per_bucket) <= 100) and (sum by (bucket) (metadata_total_bytes_per_bucket) <= 1000000000))",
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "1m",
+      "title": "Small Buckets",
+      "transformations": [],
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "id": 238,
+      "panels": [],
+      "title": "Bucket Expiration Lifecycle policy considerations",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "description": "Total number of buckets that received unversioned deletes, and thus, very likely need Bucket Expiration Lifecycle policy.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": -2,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 0,
+        "y": 16
+      },
+      "hideTimeOverride": true,
+      "id": 239,
+      "maxDataPoints": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(http_s3_servlet_delete_requests_per_bucket_total{delete_type=\"latest\"})",
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "1m",
+      "title": "Buckets with unversioned deletes",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "seriesToRows",
+            "reducers": [
+              "count"
+            ]
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "system Bucket",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "Field"
+              ],
+              "reducer": "count"
+            }
+          }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "count"
+            ]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "description": "Total number of buckets that received versioned deletes.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": -2,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 8,
+        "y": 16
+      },
+      "hideTimeOverride": true,
+      "id": 236,
+      "maxDataPoints": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(http_s3_servlet_delete_requests_per_bucket_total{delete_type=\"versioned\"})",
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "1m",
+      "title": "Buckets with versioned deletes",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "seriesToRows",
+            "reducers": [
+              "count"
+            ]
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "system Bucket",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "Field"
+              ],
+              "reducer": "count"
+            }
+          }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "count"
+            ]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "description": "The number of buckets where the number of unversioned deletes is above 1000",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "0"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "max": -1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 16
+      },
+      "hideTimeOverride": true,
+      "id": 241,
+      "maxDataPoints": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "(count by (bucket)(http_s3_servlet_delete_requests_per_bucket_total{delete_type=\"latest\"} > 1000))",
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "1m",
+      "title": "Number of buckets that likely need Expiration Lifecycle policy",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "seriesToRows",
+            "reducers": [
+              "count"
+            ]
+          }
+        },
+        {
+          "disabled": true,
+          "id": "calculateField",
+          "options": {
+            "alias": "system Bucket",
+            "mode": "reduceRow",
+            "reduce": {
+              "include": [
+                "Field"
+              ],
+              "reducer": "count"
+            }
+          }
+        },
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "count"
+            ]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "description": "The number of versioned and unversioned deletes per bucket.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "inspect": false
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "text",
+                  "index": 1,
+                  "text": "-"
+                }
+              },
+              "type": "value"
+            },
+            {
+              "options": {
+                "match": "null+nan",
+                "result": {
+                  "color": "text",
+                  "index": 0,
+                  "text": "-"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Versioned Deletes"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 139
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Unversioned Deletes"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 245
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total Deletes"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 117
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Buckets"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 398
+              },
+              {
+                "id": "mappings",
+                "value": []
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Delete rate"
+            },
+            "properties": [
+              {
+                "id": "custom.minWidth",
+                "value": 120
+              },
+              {
+                "id": "unit",
+                "value": "iops"
+              },
+              {
+                "id": "custom.width",
+                "value": 231
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bucket Expiration policy"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "color": "green",
+                        "index": 2,
+                        "text": "Not needed"
+                      }
+                    },
+                    "type": "value"
+                  },
+                  {
+                    "options": {
+                      "from": 1001,
+                      "result": {
+                        "color": "yellow",
+                        "index": 0,
+                        "text": "Likely needed now"
+                      },
+                      "to": 1e+25
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": 1,
+                      "result": {
+                        "color": "light-green",
+                        "index": 1,
+                        "text": "Check later"
+                      },
+                      "to": 1000
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "match": "null+nan",
+                      "result": {
+                        "color": "green",
+                        "index": 3,
+                        "text": "Not needed"
+                      }
+                    },
+                    "type": "special"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 309
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "hideTimeOverride": true,
+      "id": 240,
+      "maxDataPoints": 1,
+      "options": {
+        "footer": {
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Bucket Expiration policy"
+          }
+        ]
+      },
+      "pluginVersion": "9.2.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(http_s3_servlet_delete_requests_per_bucket_total{delete_type=\"versioned\"})",
+          "format": "table",
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(http_s3_servlet_delete_requests_per_bucket_total{delete_type=\"latest\"})",
+          "format": "table",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(rate(http_s3_servlet_delete_requests_per_bucket_total[10m]))",
+          "format": "table",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(http_s3_servlet_delete_requests_per_bucket_total{delete_type=\"latest\"})",
+          "format": "table",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(http_s3_servlet_delete_requests_per_bucket_total)",
+          "format": "table",
+          "hide": true,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum by (bucket)(rate(http_s3_servlet_delete_requests_per_bucket_total{delete_type=\"latest\"}[10m]))",
+          "format": "table",
+          "hide": true,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "(sum by (bucket) (http_s3_servlet_ingest_object_bytes_per_bucket_total)) - (sum by (bucket) (http_s3_servlet_ingest_object_bytes_per_bucket_total offset 24h))",
+          "format": "table",
+          "hide": true,
+          "interval": "",
+          "legendFormat": "{{bucket}}",
+          "range": true,
+          "refId": "G"
+        }
+      ],
+      "timeFrom": "1m",
+      "title": "Versioned and Unversioned Deletes",
+      "transformations": [
+        {
+          "id": "seriesToColumns",
+          "options": {
+            "byField": "bucket"
+          }
+        },
+        {
+          "disabled": true,
+          "id": "reduce",
+          "options": {
+            "includeTimeField": false,
+            "mode": "seriesToRows",
+            "reducers": [
+              "last"
+            ]
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Value #E": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "Difference": "Delta",
+              "Field": "Bucket Name",
+              "Last": "Capacity",
+              "Value": "Delete count",
+              "Value #A": "Versioned Deletes",
+              "Value #B": "Unversioned Deletes",
+              "Value #C": "Total Deletes",
+              "Value #D": "Delete rate",
+              "Value #E": "PUT Throughput",
+              "Value #F": "Bucket Expiration policy",
+              "Value #G": "Added objects in 24h",
+              "bucket": "Buckets"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": true,
+                "field": "PUT Throughput"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": true,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ClusterName}"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 77,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue"
+                  }
+                ]
+              },
+              "unit": "binBps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 12,
+            "x": 0,
+            "y": 29
+          },
+          "id": 2,
+          "maxDataPoints": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "/.*/",
+              "limit": 1,
+              "values": false
+            },
+            "text": {
+              "titleSize": 20,
+              "valueSize": 40
+            },
+            "textMode": "value"
+          },
+          "pluginVersion": "9.2.4",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket) (rate(http_s3_servlet_ingest_object_bytes_per_bucket_total[10m])))",
+              "format": "time_series",
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket) (rate(http_s3_servlet_ingest_object_bytes_per_bucket[10m])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": "1h",
+          "title": "Bucket with Max PUT Throughput ",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "includeTimeField": false,
+                "labelsToFields": false,
+                "mode": "seriesToRows",
+                "reducers": [
+                  "last"
+                ]
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "indexByName": {},
+                "renameByName": {
+                  "Difference": "Delta",
+                  "Field": "Bucket",
+                  "Last": "Throughput"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "fields": {},
+                "sort": [
+                  {
+                    "desc": false,
+                    "field": "Throughput"
+                  }
+                ]
+              }
+            }
+          ],
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "description": "A bucket with Max GET Throughput ",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue"
+                  }
+                ]
+              },
+              "unit": "binBps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 12,
+            "x": 12,
+            "y": 29
+          },
+          "id": 233,
+          "maxDataPoints": 1,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "/.*/",
+              "limit": 1,
+              "values": false
+            },
+            "text": {
+              "titleSize": 20,
+              "valueSize": 40
+            },
+            "textMode": "value"
+          },
+          "pluginVersion": "9.2.4",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket) (rate(http_s3_servlet_get_object_response_bytes_per_bucket_total[10m])))",
+              "format": "time_series",
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket) (rate(http_s3_servlet_get_object_response_bytes_per_bucket[10m])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": "1h",
+          "title": "Bucket with Max GET Throughput ",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "includeTimeField": false,
+                "labelsToFields": false,
+                "mode": "seriesToRows",
+                "reducers": [
+                  "last"
+                ]
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "indexByName": {},
+                "renameByName": {
+                  "Difference": "Delta",
+                  "Field": "Bucket",
+                  "Last": "Throughput"
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "fields": {},
+                "sort": [
+                  {
+                    "desc": false,
+                    "field": "Throughput"
+                  }
+                ]
+              }
+            }
+          ],
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 3,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "binBps"
+            },
+            "overrides": [
+              {
+                "__systemRef": "hideSeriesFrom",
+                "matcher": {
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "Ingest:healthpartners"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 33
+          },
+          "id": 110,
+          "interval": "1",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "topk(3,sum by (bucket) (rate(http_s3_servlet_get_object_response_bytes_per_bucket_total[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "GET:{{bucket}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "topk(3,sum by (bucket) (rate(http_s3_servlet_ingest_object_bytes_per_bucket_total[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Ingest:{{bucket}}",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(3,sum by (bucket) (rate(http_s3_servlet_get_object_response_bytes_per_bucket[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "GET:{{bucket}}",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(3,sum by (bucket) (rate(http_s3_servlet_ingest_object_bytes_per_bucket[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Ingest:{{bucket}}",
+              "refId": "C"
+            }
+          ],
+          "title": "S3 PUT/GET Throughput by bucket",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "description": "Which buckets are writing",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 3,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "ops"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "BulkDelete"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "text",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 39
+          },
+          "id": 63,
+          "interval": "1s",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.2.4",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(3,sum by (bucket)(rate(http_s3_servlet_requests_per_bucket{operation=\"S3PutObjectOperation\"}[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket)(rate(http_s3_servlet_requests_per_bucket{operation=\"S3PutObjectPartOperation\"}[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "PutPart {{bucket}}",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(3,sum by (bucket)(rate(http_s3_servlet_requests_per_bucket_total{operation=\"S3PutObjectOperation\"}[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket)(rate(http_s3_servlet_requests_per_bucket_total{operation=\"S3PutObjectPartOperation\"}[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "PutPart {{bucket}}",
+              "refId": "D"
+            }
+          ],
+          "title": "Top S3 PUT IOPS by bucket",
+          "transformations": [
+            {
+              "disabled": true,
+              "id": "reduce",
+              "options": {
+                "includeTimeField": false,
+                "mode": "seriesToRows",
+                "reducers": []
+              }
+            }
+          ],
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "description": "Max throughput over the reporting period",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 3,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  }
+                ]
+              },
+              "unit": "binBps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 46
+          },
+          "id": 120,
+          "interval": "1",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.2.4",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(3,sum by (bucket) (rate(http_s3_servlet_ingest_object_bytes_per_bucket[30s])))",
+              "instant": false,
+              "interval": "",
+              "legendFormat": "PUT {{bucket}}",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket) (rate(http_s3_servlet_get_object_response_bytes_per_bucket[30s])))",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "GET {{bucket}}",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(3,sum by (bucket) (rate(http_s3_servlet_ingest_object_bytes_per_bucket_total[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "PUT {{bucket}}",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket) (rate(http_s3_servlet_get_object_response_bytes_per_bucket_total[30s])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "GET {{bucket}}",
+              "refId": "D"
+            }
+          ],
+          "title": "Top S3 PUT Throughput by bucket",
+          "transformations": [],
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "description": "Versioned and Unversioned deletes\nsum by (bucket)(http_s3_servlet_delete_requests_per_bucket_total)",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 3,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  }
+                ]
+              },
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 53
+          },
+          "id": 64,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.2.4",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket)(rate(http_s3_servlet_delete_requests_per_bucket_total{}[10m])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Top S3 Delete Activity by bucket",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "includeTimeField": false,
+                "mode": "seriesToRows",
+                "reducers": []
+              }
+            }
+          ],
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "description": "Which buckets are Listing",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 3,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  }
+                ]
+              },
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 61
+          },
+          "id": 242,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.2.4",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket)(rate(http_s3_servlet_requests_per_bucket{operation=~\"S3List.*Operation\"}[10m])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket)(rate(http_s3_servlet_requests_per_bucket_total{operation=~\"S3ListVersionsOperation|S3ListObjectsOperation|S3ListObjectsV1Operation|S3ListObjectsV2Operation\"}[10m])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Top S3 List Activity by bucket",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "includeTimeField": false,
+                "mode": "seriesToRows",
+                "reducers": []
+              }
+            }
+          ],
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "description": "Max throughput over the reporting period",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  }
+                ]
+              },
+              "unit": "binBps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 69
+          },
+          "id": 121,
+          "interval": "1",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.2.4",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket) (rate(http_s3_servlet_get_object_response_bytes_per_bucket_total[10m])))",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "GET {{bucket}}",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket) (rate(http_s3_servlet_get_object_response_bytes_per_bucket[10m])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "GET {{bucket}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Top GET Throughput by bucket",
+          "transformations": [],
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "description": "Which buckets are reading",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  }
+                ]
+              },
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 76
+          },
+          "id": 62,
+          "interval": "1",
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.2.4",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket)(rate(http_s3_servlet_requests_per_bucket{operation=\"S3GetObjectOperation\"}[1m])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${ClusterName}"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "topk(1,sum by (bucket)(rate(http_s3_servlet_requests_per_bucket_total{operation=\"S3GetObjectOperation\"}[1m])))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{bucket}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Top S3 GET IOPS by bucket",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "includeTimeField": false,
+                "mode": "seriesToRows",
+                "reducers": []
+              }
+            }
+          ],
+          "type": "timeseries"
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ClusterName}"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": "Bucket I/O Activity",
+      "type": "row"
+    }
+  ],
+  "refresh": false,
+  "schemaVersion": 37,
+  "style": "dark",
+  "tags": [
+    "cloudscale"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "PrometheusLocal",
+          "value": "PrometheusLocal"
+        },
+        "description": "Choose a Cluster to Connect and Display",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Choose  Cluster",
+        "multi": false,
+        "name": "ClusterName",
+        "options": [],
+        "query": "prometheus",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "isNone": true,
+          "selected": false,
+          "text": "None",
+          "value": ""
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ClusterName}"
+        },
+        "definition": "label_values(node_uname_info, job)",
+        "hide": 2,
+        "includeAll": false,
+        "label": "Job",
+        "multi": false,
+        "name": "job",
+        "options": [],
+        "query": {
+          "query": "label_values(node_uname_info, job)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ClusterName}"
+        },
+        "definition": "label_values(node_uname_info{job=\"$job\"}, instance)",
+        "hide": 2,
+        "includeAll": true,
+        "label": "Host:",
+        "multi": false,
+        "name": "node",
+        "options": [],
+        "query": {
+          "query": "label_values(node_uname_info{job=\"$job\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query"
+      },
+      {
+        "description": "WildCard",
+        "hide": 2,
+        "label": "WildCard",
+        "name": "allnodes",
+        "query": "${VAR_ALLNODES}",
+        "skipUrlSync": false,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "^docker.*$|^lo$",
+          "value": "^docker.*$|^lo$"
+        },
+        "hide": 2,
+        "includeAll": false,
+        "label": "Exclude_Device",
+        "multi": false,
+        "name": "excl_net",
+        "options": [
+          {
+            "selected": true,
+            "text": "^docker.*$|^lo$",
+            "value": "^docker.*$|^lo$"
+          }
+        ],
+        "query": "^docker.*$|^lo$",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "HCP for Cloud Scale - Dashboard 4: Buckets Stats and Activity",
+  "uid": "hcpcsdashboard4",
+  "version": 1,
+  "weekStart": ""
+}
