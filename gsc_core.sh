@@ -216,9 +216,9 @@ gsc_prep_partition_artifacts_and_parse() {
   if gsc_build_json_from_matches "${_search_dir}" "*map*.json" "${_map_out}" "array"; then
     gsc_rotate_log "${_support_dir}/partitionMap_parse.log" 2
     if [[ -x "${_bundle_dir}/hcpcs_parse_partitions_mp.sh" ]]; then
-      "${_bundle_dir}/hcpcs_parse_partitions_mp.sh" -f "${_map_out}" | tee "${_support_dir}/partitionMap_parse.log"
+      "${_bundle_dir}/hcpcs_parse_partitions_mp.sh" -f "${_map_out}" | tee "${_support_dir}/partitionMap_parse.log" || true
     elif [[ -x "${_bundle_dir}/hcpcs_parse_partitions_map.sh" ]]; then
-      "${_bundle_dir}/hcpcs_parse_partitions_map.sh" -f "${_map_out}" | tee "${_support_dir}/partitionMap_parse.log"
+      "${_bundle_dir}/hcpcs_parse_partitions_map.sh" -f "${_map_out}" | tee "${_support_dir}/partitionMap_parse.log" || true
     fi
   fi
 
@@ -226,8 +226,22 @@ gsc_prep_partition_artifacts_and_parse() {
   if gsc_build_json_from_matches "${_search_dir}" "*state*.json" "${_state_out}" "array"; then
     gsc_rotate_log "${_support_dir}/partitionState_parse.log" 2
     if [[ -x "${_bundle_dir}/hcpcs_parse_partitions_state.sh" ]]; then
-      "${_bundle_dir}/hcpcs_parse_partitions_state.sh" -f "${_state_out}" | tee "${_support_dir}/partitionState_parse.log"
+      "${_bundle_dir}/hcpcs_parse_partitions_state.sh" -f "${_state_out}" | tee "${_support_dir}/partitionState_parse.log" || true
     fi
+  fi
+
+  # ---- Split Events JSON (partition split history for growth analysis) ----
+  local _split_out="${_support_dir}/partitionSplit.json"
+  local -a _split_files=()
+  mapfile -t _split_files < <(find "${_search_dir}" -type f -iname "*splitpartition*.json" ! -iname "*.err" | sort)
+  if [[ ${#_split_files[@]} -gt 0 ]]; then
+    gsc_log_info "Building ${_split_out} from ${#_split_files[@]} file(s) matching: *splitpartition*.json"
+    jq -sc 'unique_by(.parentId)[]' "${_split_files[@]}" > "${_split_out}"
+    local _split_count
+    _split_count=$(wc -l < "${_split_out}")
+    gsc_log_success "Wrote ${_split_out} (${_split_count} unique split events)"
+  else
+    gsc_log_info "No split event files matched (*splitpartition*.json); skipping ${_split_out}"
   fi
 }
 

@@ -21,4 +21,4 @@ _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 gsc_log_info "Preparing partition artifacts under supportLogs/ from: ${_search_dir}"
 gsc_prep_partition_artifacts_and_parse "${_search_dir}" "supportLogs"
-gsc_log_success "Done. See supportLogs/partitionMap.json, supportLogs/partitionState.json, supportLogs/partitionStateProperties.txt"
+gsc_log_success "Done. See supportLogs/partitionMap.json, supportLogs/partitionState.json, supportLogs/partitionStateProperties.txt, supportLogs/partitionSplit.json"

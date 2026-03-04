@@ -113,8 +113,8 @@ gsc_log_info "# RUN get_partition_details.sh"
 _max_partitions=$(grep -E "^[[:space:]]*[0-9]+ [0-9.]+" health_report_partition_details.log 2>/dev/null | awk '{print $1}' | sort -rn | head -n 1 || echo 0)
 if [[ "${_max_partitions}" -gt 1500 ]]; then
     gsc_log_info "High partition count detected (${_max_partitions}). Generating growth chart..."
-    _part_json="supportLogs/partitionMap.json"
-    [[ ! -f "${_part_json}" ]] && _part_json=$(find . -name partitionMap.json -print -quit 2>/dev/null || echo "")
+    _part_json="supportLogs/partitionSplit.json"
+    [[ ! -f "${_part_json}" ]] && _part_json=$(find . -name partitionSplit.json -print -quit 2>/dev/null || echo "")
     _pg_bin="${_script_dir}/partition_growth/build/partition_growth-linux-amd64"
     _pg_plot="${_script_dir}/partition_growth/plot.gp"
     if [[ -n "${_part_json}" && -f "${_part_json}" && -x "${_pg_bin}" && -f "${_pg_plot}" ]]; then
