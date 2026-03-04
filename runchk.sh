@@ -88,6 +88,9 @@ gsc_log_info "# RUN prep_services_instances.sh"
 "${_script_dir}/prep_services_instances.sh" . > health_report_services_instances.log 2>&1 || true
 cat health_report_services_instances.log >> "${_tmp_report_output}"
 
+gsc_log_info "# RUN chk_service_placement.sh"
+"${_script_dir}/chk_service_placement.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
+
 gsc_log_info "# RUN chk_chrony.sh"
 "${_script_dir}/chk_chrony.sh" -d . 2>&1 | tee -a "${_tmp_report_output}" || true
 
@@ -176,8 +179,21 @@ if [[ "${_no_metrics}" -eq 0 ]]; then
     _prom_p="${_prom_port:-9090}"
     
     if [[ -n "${_prom_host}" ]]; then
-        gsc_log_info "# RUN chk_metrics.sh on ${_prom_host}:${_prom_p}"
-        "${_script_dir}/chk_metrics.sh" -c "${_prom_host}" -n "${_prom_p}" 2>&1 | tee -a "${_tmp_report_output}" || true
+        if [[ -n "${PROM_CMD_PARAM_HOURLY:-}" ]]; then
+            gsc_log_info "# RUN chk_metrics.sh (using PROM_CMD_PARAM_HOURLY from ${_config_file})"
+            IFS=' ' read -ra _chk_metrics_args <<< "${PROM_CMD_PARAM_HOURLY}"
+            # Fix json path: if the specified file doesn't exist, look for it alongside the scripts
+            for _ci in "${!_chk_metrics_args[@]}"; do
+                if [[ "${_chk_metrics_args[$_ci]}" == *.json && ! -f "${_chk_metrics_args[$_ci]}" ]]; then
+                    _fallback="${_script_dir}/$(basename -- "${_chk_metrics_args[$_ci]}")"
+                    [[ -f "${_fallback}" ]] && _chk_metrics_args[$_ci]="${_fallback}"
+                fi
+            done
+            "${_script_dir}/chk_metrics.sh" "${_chk_metrics_args[@]}" 2>&1 | tee -a "${_tmp_report_output}" || true
+        else
+            gsc_log_info "# RUN chk_metrics.sh on ${_prom_host}:${_prom_p}"
+            "${_script_dir}/chk_metrics.sh" -c "${_prom_host}" -n "${_prom_p}" 2>&1 | tee -a "${_tmp_report_output}" || true
+        fi
     else
         gsc_log_warn "# SKIP chk_metrics.sh: Prometheus host not found in ${_config_file}"
     fi
@@ -186,6 +202,40 @@ fi
 # ── Final Report ─────────────────────────────────────────────────────────────
 if [[ -n "${_report_file}" ]]; then
     "${_script_dir}/generate_report.sh" -o "${_report_file}" -d .
+fi
+
+# ── Final Summary ────────────────────────────────────────────────────────────
+_end_epoch=$(date -u +%s)
+_elapsed=$(( _end_epoch - _current_time_epoch ))
+
+_issues_filter='^health_report_messages\.log:|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source.s. fully reachable|^[[:space:]]*[0-9]+ [0-9.]+[[:space:]]*\[(CRITICAL|WARNING|DANGER|good)\]'
+_all_issues=$(grep -hE "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" || true)
+_issues_count=$(printf '%s\n' "${_all_issues}" | grep -c . 2>/dev/null || echo 0)
+
+gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
+gsc_log_info "SUMMARY: ${_issues_count} issue(s) found | Elapsed: ${_elapsed}s"
+gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
+
+_critical_issues=$(printf '%s\n' "${_all_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' || true)
+_error_issues=$(printf '%s\n' "${_all_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' || true)
+_warning_issues=$(printf '%s\n' "${_all_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR" | sed 's/^health_report_[^:]*://' || true)
+_action_issues=$(printf '%s\n' "${_all_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING" | sed 's/^health_report_[^:]*://' || true)
+
+if [[ -n "${_critical_issues}" ]]; then
+    gsc_log_info "++++++++++ CRITICAL / ALERT ++++++++++"
+    while IFS= read -r _ln; do [[ -n "${_ln}" ]] && gsc_log_critical "${_ln}"; done <<< "${_critical_issues}"
+fi
+if [[ -n "${_error_issues}" ]]; then
+    gsc_log_info "++++++++++ ERROR ++++++++++"
+    while IFS= read -r _ln; do [[ -n "${_ln}" ]] && gsc_log_error "${_ln}"; done <<< "${_error_issues}"
+fi
+if [[ -n "${_warning_issues}" ]]; then
+    gsc_log_info "++++++++++ WARNING ++++++++++"
+    while IFS= read -r _ln; do [[ -n "${_ln}" ]] && gsc_log_warn "${_ln}"; done <<< "${_warning_issues}"
+fi
+if [[ -n "${_action_issues}" ]]; then
+    gsc_log_info "++++++++++ ACTION ++++++++++"
+    while IFS= read -r _ln; do [[ -n "${_ln}" ]] && gsc_log_action "${_ln}"; done <<< "${_action_issues}"
 fi
 
 gsc_log_success "Checks complete. Logs available in current directory."

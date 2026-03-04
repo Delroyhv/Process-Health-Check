@@ -87,9 +87,7 @@ getOptions() {
 #
 getOptions "$@"
 
-if [[ -f ${_output_file} ]]; then
-    mv ${_output_file} ${_output_file}.bak
-fi
+gsc_rotate_log "${_output_file}"
 
 gsc_log_info "== CHECKING STORAGE COMPONENTS CONFIG (S-NODES) =="
 

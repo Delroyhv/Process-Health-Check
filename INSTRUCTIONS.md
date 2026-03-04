@@ -264,11 +264,15 @@ New Dependencies:
 - go: Used to build the high-performance `gsc_calc` arithmetic utility.
 
 Current Status:
-- CLI updated to 0.31.0.
+- no coauthor
 - Partition growth analysis completed for case 01234567.
-- VERSION updated to v1.2.14.
+- VERSION updated to v1.2.52.
 - Centralized all common functions into `gsc_core.sh`.
 - Implemented and optimized arithmetic logic using a new Go-based utility `gsc_calc`.
 - Added robust cleanup functions to `gsc_prometheus.sh` and `gsc_grafana.sh`.
 - Integrated secure `sudo` password management.
---- End of Context from: GEMINI.md ---
+
+Support Bundle Rules:
+- Support bundles are located in /ci under 8-digit SR number directories.
+- Auto-discovery excludes any files starting with 'log_' or containing 'diag' in the name.
+- Only standard 'supportLogs_*.tar.xz' and '*Prometheus*.tar.xz' files are eligible for expansion.

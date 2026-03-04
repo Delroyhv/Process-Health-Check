@@ -105,9 +105,7 @@ getOptions "$@"
 
 gsc_log_info "== CHECKING SERVICE'S RUN CONFIG =="
 
-if [[ -f ${_output_file} ]]; then
-    mv ${_output_file} ${_output_file}.bak
-fi
+gsc_rotate_log "${_output_file}"
 
 _err=0
 

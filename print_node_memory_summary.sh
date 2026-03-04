@@ -217,30 +217,4 @@ print_node_memory_summary() {
     gsc_log_success "Saved results health_report_node_memory.log"
 }
 
-# Helper to convert human-readable sizes (e.g., 10G, 50M) to KB
-gsc_to_kb() {
-    local _size="$1"
-    local _value _unit
-
-    if [[ "${_size}" =~ ([0-9.]+)([KMGTPEZY]?B?) ]]; then
-        _value="${BASH_REMATCH[1]}"
-        _unit="${BASH_REMATCH[2]}"
-    elif [[ "${_size}" =~ ([0-9.]+) ]]; then # raw number (assume KB if large, MB if small)
-        _value="${BASH_REMATCH[1]}"
-        if (( $(echo "$_value > 2000000" | bc -l) )); then # Heuristic: if > 2GB (2M KB), assume KB
-            _unit="KB"
-        else # assume MB
-            _unit="MB"
-        fi
-    fi
-
-    case "${_unit}" in
-        "KB"|"K"|"") echo "$_value" ;;
-        "MB"|"M") echo "$((_value * 1024))" ;;
-        "GB"|"G") echo "$((_value * 1024 * 1024))" ;;
-        "TB"|"T") echo "$((_value * 1024 * 1024 * 1024))" ;;
-        *) echo "0" ;; # Unknown unit
-    esac
-}
-
 print_node_memory_summary

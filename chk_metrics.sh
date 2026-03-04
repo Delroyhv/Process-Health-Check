@@ -158,29 +158,6 @@ getOptions() {
     done
 }
 
-_sii=0
-###############################
-#
-# Display a spinner
-#
-spinner() {
-    gsc_spinner
-}
-
-###############################
-# Compare value against a provided limit, using a provided operator (> < == !=)
-#
-# Input:
-#   $1 - value to check
-#   $2 - operator ( >  <  ==  !=)
-#   $3 - limit
-#
-# Output:
-#   A message, if a provided condition is a match, or an empty string if no match.
-#
-compare_value() {
-    gsc_compare_value "$1" "$2" "$3"
-}
 
 
 ###############################
@@ -212,7 +189,7 @@ check_value() {
         _ignore_operator=$(echo "${_ignore_criteria}" | awk ' { print $1 } ')
         _ignore_limit=$(echo "${_ignore_criteria}" | awk ' { print $2 } ')
         _comment=$(echo "${_ignore_criteria}" | awk '{$1=$2="";print $0}')
-        _ignore_ret=$(compare_value "$_value" "$_ignore_operator" "$_ignore_limit")
+        _ignore_ret=$(gsc_compare_value "$_value" "$_ignore_operator" "$_ignore_limit")
     fi
 
     # Ignore, if ignore-criteria OR if a value is negative
@@ -230,13 +207,13 @@ check_value() {
         if [[ "$(gsc_is_empty "${_warning_criteria}")" != "true" ]]; then
             _warning_operator=$(echo "${_warning_criteria}" | awk ' { print $1 } ')
             _warning_limit=$(echo "${_warning_criteria}" | awk ' { print $2 } ')
-            _warn_ret=$(compare_value "$_value" "$_warning_operator" "$_warning_limit")
+            _warn_ret=$(gsc_compare_value "$_value" "$_warning_operator" "$_warning_limit")
         fi
 
         if [[ "$(gsc_is_empty "${_error_criteria}")" != "true" ]]; then
             _critical_operator=$(echo "${_error_criteria}" | awk ' { print $1 } ')
             _critical_limit=$(echo "${_error_criteria}" | awk ' { print $2 } ')
-            _crit_ret=$(compare_value "$_value" "$_critical_operator" "$_critical_limit")
+            _crit_ret=$(gsc_compare_value "$_value" "$_critical_operator" "$_critical_limit")
         fi
     fi
 
@@ -253,19 +230,6 @@ check_value() {
     echo "$_ret"
 }
 
-####################
-#
-# Get a date format
-#
-# Input:
-#    $1 - time in seconds (epoch)
-#
-# Output:
-#    e.g. 2024-08-19T20:10:30.781Z
-#
-get_date_format() {
-    gsc_get_date_format "$1"
-}
 
 
 ###############################
@@ -363,7 +327,7 @@ message_format_json_consecutive() {
 #
 # Parse a message from json format into human-readable format
 #
-function message_format_print() {
+message_format_print() {
     local _event_id _descr _check_data_json _value_json _value_telem_json _consecutive_count _probe_interval
     local _label_name _label _msg_count _level _msg _timestamp _time_info _avg _max _min _value
     local _label_info _all _output _timestamp_start _timestamp_end
@@ -390,7 +354,7 @@ function message_format_print() {
         _value=$(echo "${_value_json}" | jq -rc '.[1]' | tr -d '"')
         if [[ "${_probes_enabled}" == "true" ]]; then
             _timestamp=$(echo "${_value_json}" | jq -rc '.[0]')
-            _time_info=" [$(get_date_format "${_timestamp}")]"
+            _time_info=" [$(gsc_get_date_format "${_timestamp}")]"
         fi
         _msg=$(echo "${_check_data_json}" | jq -c '.message' | tr -d '"')
         _level=$(echo "${_check_data_json}" | jq -c '.level' | tr -d '"')
@@ -398,7 +362,7 @@ function message_format_print() {
         if [[ "${_probes_enabled}" == "true" ]]; then
             _timestamp_start=$(echo "${_value_telem_json}" | jq -rc '.[0]')
             _timestamp_end=$(echo "${_value_telem_json}" | jq -rc '.[1]')
-            _time_info=" [$(get_date_format "${_timestamp_start}") - $(get_date_format "${_timestamp_end}")]"
+            _time_info=" [$(gsc_get_date_format "${_timestamp_start}") - $(gsc_get_date_format "${_timestamp_end}")]"
         fi
         _avg=$(echo "${_value_telem_json}" | jq -rc '.[2]')
         _max=$(echo "${_value_telem_json}" | jq -rc '.[3]')
@@ -491,18 +455,15 @@ getOldestMetricTimestamp() {
 make_query() {
     local _metric=$1
     local _pdate_arg=$2
-    local _urlenc_metric _result
+    local _result
     local -a _mycmd
 
-    ### Convert query to URL encoding
-    _urlenc_metric=$(echo "$_metric" | jq -Rr @uri)
-
-    if [[ "${_pdate_arg}" != "" ]]; then
-        _urlenc_metric+="&time=${_pdate_arg}"
-    fi
-
-    ### Form the query command (curl)
-    _mycmd=(curl -s -k --connect-timeout 10 --max-time 30 -X GET "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query?query=${_urlenc_metric}")
+    ### Form the query command (curl POST avoids jq @uri escaping ! as \!)
+    _mycmd=(curl -s -k --connect-timeout 10 --max-time 30
+        -X POST
+        --data-urlencode "query=${_metric}")
+    [[ -n "${_pdate_arg}" ]] && _mycmd+=(--data-urlencode "time=${_pdate_arg}")
+    _mycmd+=("${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query")
     gsc_log_debug "Query command: ${_mycmd[*]}"
 
     ### Run the query command on Prometheus:
@@ -530,21 +491,22 @@ make_query_range() {
     local _start=$2
     local _end=$3
     local _step=$4
-    local _urlenc_metric _result
+    local _result
     local -a _mycmd
-
-    ### Convert query to URL encoding
-    _urlenc_metric=$(echo "$_metric" | jq -Rr @uri)
 
     if [[ "${_start}" == "" || "${_end}" == "" || "${_step}" == "" ]]; then
         echo "INTERNAL ERROR: MISSING INPUT PARAMETERS FOR QUERY_RANGE ENDPOINT (&start=${_start}&end=${_end}&step=${_step})" >&2
         exit
     fi
 
-    _urlenc_metric+="&start=${_start}&end=${_end}&step=${_step}s"
-
-    ### Form the query command (curl)
-    _mycmd=(curl -s -k --connect-timeout 10 --max-time 60 -X GET "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query_range?query=${_urlenc_metric}")
+    ### Form the query command (curl POST avoids jq @uri escaping ! as \!)
+    _mycmd=(curl -s -k --connect-timeout 10 --max-time 60
+        -X POST
+        --data-urlencode "query=${_metric}"
+        --data-urlencode "start=${_start}"
+        --data-urlencode "end=${_end}"
+        --data-urlencode "step=${_step}s"
+        "${_prom_proto}://${_prom_name}:${_prom_port}/api/v1/query_range")
     gsc_log_debug "Query Range command: ${_mycmd[*]}"
 
     ### Run the query command on Prometheus:
@@ -602,59 +564,59 @@ elif [[ "${_verbose}" == "debug" ]]; then
 elif [[ "${_verbose}" == "" ]]; then
     _debug=0
 else
-    echo "ERROR: Invalid verbose mode: ${_verbose} - if specified, must be either 'info' or 'debug'"
-    exit
+    gsc_log_error "Invalid verbose mode: ${_verbose} - if specified, must be either 'info' or 'debug'"
+    exit 1
 fi
 
 # Validate Prometheus FQDN name
 if [[ "${_prom_name}" == "" ]]; then
     gsc_log_error "Prometheus node name or IP is a required parameter"
-    exit
+    exit 1
 fi
 
 # Validate the date format
 if [[ "$(gsc_is_empty "${_pdate}")" != "true" ]]; then
     _pdate_epoch=$(date -d "${_pdate}" +%s)
     if [[ "$(gsc_is_number "${_pdate_epoch}")" != "true" ]]; then
-        echo "ERROR: DATE FORMAT IS INCORRECT: ${_pdate} (expected format: 2024-08-19T20:10:30.781Z)"
-        exit
+        gsc_log_error "DATE FORMAT IS INCORRECT: ${_pdate} (expected format: 2024-08-19T20:10:30.781Z)"
+        exit 1
     elif [[ "${_pdate_epoch}" -lt "${_test_epoch_time}" ]]; then
-        echo "ERROR: DATE IS TOO OLD: ${_pdate} (expected after 2020)"
-        exit
+        gsc_log_error "DATE IS TOO OLD: ${_pdate} (expected after 2020)"
+        exit 1
     fi
 
     _pdate_epoch=$(date -u -d "${_pdate}" +%s)
-    _date_suffix="$(date -u -d @${_pdate_epoch} +'%Y%b%d_%H%M%S%Z')"
+    _date_suffix="$(date -u -d @"${_pdate_epoch}" +'%Y%b%d_%H%M%S%Z')"
 fi
 
 # Validate an input metrics json file
 if [[ ! -f "${_metrics_json_file}" ]]; then
-    echo "ERROR: CANNOT FIND METRICS JSON FILE: ${_metrics_json_file}"
-    exit
+    gsc_log_error "CANNOT FIND METRICS JSON FILE: ${_metrics_json_file}"
+    exit 1
 fi
 
 # Validate protocol (it must be either http or https)
 if [[ "${_prom_proto}" != "" && "${_prom_proto}" != "${_https_string}" && ${_prom_proto} != "${_http_string}" ]]; then
-    echo "ERROR: INVALID PARAMETER -s (${_prom_proto})"
-    exit
+    gsc_log_error "INVALID PARAMETER -s (${_prom_proto})"
+    exit 1
 fi
 
 # Validate a probe interval (in seconds)
 if [[ "$(gsc_is_number "${_probes_interval}")" != "true" ]]; then
-    echo "ERROR: probes interval (in seconds) must be an integer number (${_probes_interval})"
-    exit
+    gsc_log_error "probes interval (in seconds) must be an integer number (${_probes_interval})"
+    exit 1
 fi
 
 # Validate a number of probes (number of values in each metric request)
 if [[ "$(gsc_is_number "${_probes_num}")" != "true" ]]; then
-    echo "ERROR: number of probes must be an integer number (${_probes_num})"
-    exit
+    gsc_log_error "number of probes must be an integer number (${_probes_num})"
+    exit 1
 fi
 
 # Safety net - the number of probes shouldn't be too high
 if (( _probes_num > _max_probes_num )); then
-    echo "ERROR: number of probes must be equal or less than ${_max_probes_num} (${_probes_num} is too high)"
-    exit
+    gsc_log_error "number of probes must be equal or less than ${_max_probes_num} (${_probes_num} is too high)"
+    exit 1
 fi
 
 # Metrics json file short name (no path, no extension)
@@ -681,7 +643,7 @@ gsc_log_info "Collect various metrics from the HCP-CS system - ${_prom_proto}://
 gsc_log_info "Using metric definition json file: ${_metrics_json_file}"
 
 _current_time_epoch=$(date -u +%s)
-_current_time_human=$(date -u -d @${_current_time_epoch} +'%Y-%0m-%0dT%H:%M:%S.%3NZ')
+_current_time_human=$(date -u -d @"${_current_time_epoch}" +'%Y-%0m-%0dT%H:%M:%S.%3NZ')
 gsc_log_info "Time now (UTC): ${_current_time_human}"
 
 _num_queries=0
@@ -701,7 +663,7 @@ else
 fi
 
 ((_start_time_epoch=_end_time_epoch-((_probes_num-1)*_probes_interval))) # number of probes = ${_probes_num}
-_start_time=$(date -u -d @${_start_time_epoch} +'%Y-%0m-%0dT%H:%M:%S.%3NZ')
+_start_time=$(date -u -d @"${_start_time_epoch}" +'%Y-%0m-%0dT%H:%M:%S.%3NZ')
 
 if [[ "${_probes_enabled}" == "true" ]]; then
     gsc_log_info "Prometheus query range: ${_probes_num} probes with ${_probes_interval} seconds steps"
@@ -720,7 +682,7 @@ elif [[ "${_forced_proto}" == "false" && ("$(gsc_is_empty "${_oldest_date}")" ==
         gsc_log_info "Auto-switching protocol to ${_prom_proto} - collecting from ${_prom_proto}://${_prom_name}:${_prom_port}"
     fi
 else
-    gsc_log_info "Oldest metric timestamp: $(get_date_format "${_oldest_date}")"
+    gsc_log_info "Oldest metric timestamp: $(gsc_get_date_format "${_oldest_date}")"
 fi
 
 # Use a specified metrics json file, unless -w is specified for testing from an internal variable
@@ -780,12 +742,12 @@ while IFS='' read -r _line || [[ -n "${_line}" ]]; do
     gsc_log_debug "Extracted all variables for ${_event_id}"
 
     # if query contains %PROBESTEP variable - replace it with a specified ${_probes_interval} in seconds
-    if [[ "$(echo "${_metric_query}" | grep "%PROBESTEP")" != "" ]]; then
-        _metric_query=$(echo "${_metric_query}" | sed "s/%PROBESTEP/${_probes_interval}s/g")
+    if [[ "${_metric_query}" == *"%PROBESTEP"* ]]; then
+        _metric_query="${_metric_query//%PROBESTEP/${_probes_interval}s}"
     fi
     # if query contains %THRESHOLD variable - replace it with a specified ${_threshold} in bytes
-    if [[ "$(echo "${_metric_query}" | grep "%THRESHOLD")" != "" ]]; then
-        _metric_query=$(echo "${_metric_query}" | sed "s/%THRESHOLD/${_threshold}/g")
+    if [[ "${_metric_query}" == *"%THRESHOLD"* ]]; then
+        _metric_query="${_metric_query//%THRESHOLD/${_threshold}}"
     fi
 
     _query_probe_step=$(echo "$_line" | jq -c '.ProbeStep' | tr -d '"')
@@ -825,14 +787,14 @@ while IFS='' read -r _line || [[ -n "${_line}" ]]; do
             _label_name=""
 
             if [[ "$(gsc_is_empty "${_label}")" != "true" ]]; then
-                _label_name=$(echo "${_result_json}" | jq -c '.metric.'${_label} | tr -d '"')
+                _label_name=$(echo "${_result_json}" | jq -c '.metric.'"${_label}" | tr -d '"')
             fi
 
             # If "Exclude" key is specified, then exclude a label that matches $_exclude_label variable
             if [[ "$(gsc_is_empty "${_label_name}")" != "true" && "${_exclude_label}" == "${_label_name}" ]]; then
                 gsc_log_debug "Skipping an excluded label: ${_exclude_label}"
                 ((_skipped_msgs++)) || true
-                spinner # show a progress bar
+                gsc_spinner # show a progress bar
                 continue
             fi
 
@@ -899,7 +861,7 @@ while IFS='' read -r _line || [[ -n "${_line}" ]]; do
                         gsc_log_debug "DEBUG: SKIP CONSECUTIVE-TYPE QUERY: ${_metric_query} - it requires step=${_step}"
                         break  # only process this query if steps in the json match the global setting
                     fi
-                    spinner
+                    gsc_spinner
 
                     if [[ "${_level}" != "INFO" ]]; then
                         # Error or Warning - the condition happened - increment the count
@@ -923,7 +885,7 @@ while IFS='' read -r _line || [[ -n "${_line}" ]]; do
                             ( ("${_level}" != "INFO") && ("${_msg_counts["${_level}"]}" == "1") ) ) ]] ; then
 
                         ((_skipped_msgs++)) || true
-                        spinner # show a progress bar
+                        gsc_spinner # show a progress bar
                         continue
                     fi
 

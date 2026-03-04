@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
-# Script: setup-grafana.sh
+# Script: gsc_grafana.sh
 # Description: Sets up a Grafana container with specified dashboards using Docker or Podman.
 #              Supports dashboard files, URLs, git repositories, and compressed archives.
 # Author: GSC
@@ -69,91 +69,82 @@ EOF
     exit 1
 }
   
-  # -------------------------------
-  # Helper: Query Prometheus Sources
-  # -------------------------------
-  query_prometheus_sources() {
-      local -a _found_sources=()
-      local _hc_file="healthcheck.conf"
-  
-      echo "🔍 Scanning for Prometheus data sources..."
-  
-      # Check healthcheck.conf
-      if [[ -f "$_hc_file" ]]; then
-          local _hc_port
-          _hc_port=$(grep -E "^_prom_port=" "$_hc_file" | cut -d'"' -f2)
-          if [[ -n "$_hc_port" ]]; then
-              _found_sources+=("healthcheck.conf (Port: $_hc_port)")
-          fi
-      fi
-  
-      # Scan running containers (try both podman and docker)
-      local _runtime
-      for _runtime in podman docker; do
-          if command -v "$_runtime" >/dev/null 2>&1; then
-              local _container_info
-              _container_info=$("$_runtime" ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep "9090" || true)
-  
-              while IFS= read -r _line; do
-                  [[ -z "$_line" ]] && continue
-                  local _name="${_line%% *}"
-                  local _ports="${_line#* }"
-                  local _hp
-                  # Extract host port from mapping (e.g., 0.0.0.0:9090->9090/tcp or 9090/tcp)
-                  # Regex matches :PORT->9090
-                  if [[ "$_ports" =~ :([0-9]+)-\>9090 ]]; then
-                      _hp="${BASH_REMATCH[1]}"
-                      _found_sources+=("Container: $_name (Port: $_hp)")
-                  fi
-              done <<< "$_container_info"
-          fi
-      done
-  
-      if [[ ${#_found_sources[@]} -eq 0 ]]; then
-          echo "❌ No Prometheus sources found in containers or healthcheck.conf."
-          return 0
-      fi
-  
-      echo "Found Prometheus sources:"
-      for i in "${!_found_sources[@]}"; do
-          printf "  [%d] %s\n" "$i" "${_found_sources[$i]}"
-      done
-  
-      local _choice
-      read -p "Select a source [0-$((${#_found_sources[@]}-1))]: " _choice
-      if [[ ! "$_choice" =~ ^[0-9]+$ ]] || [[ "$_choice" -lt 0 ]] || [[ "$_choice" -ge ${#_found_sources[@]} ]]; then
-          echo "❌ Invalid selection. Using default data source."
-          return 0
-      fi
-  
-      local _selected_port
-      _selected_port=$(echo "${_found_sources[$_choice]}" | grep -oE "Port: [0-9]+" | cut -d' ' -f2)
-  
-      local _selected_ip
-      read -p "Enter Prometheus IP address [default: 127.0.0.1]: " _selected_ip
-      _selected_ip=${_selected_ip:-127.0.0.1}
-  
-      _datasource_url="http://$_selected_ip:$_selected_port"
-      echo "✅ Datasource set to: $_datasource_url"
-  }
-
-  # -------------------------------
-  # Helper: Cleanup Grafana
-  # -------------------------------
-  cleanup_grafana() {
-      local _runtime="${_container_engine:-}"
-      if [[ -z "$_runtime" ]]; then
-          if command -v podman >/dev/null 2>&1; then _runtime="podman"; else _runtime="docker"; fi
-      fi
-      gsc_container_cleanup "${_runtime}" "^grafana$" "${_override_confirm}" "${_cleanup_volumes}"
-  }
-  
-  # -------------------------------
-  # Check if running as root
-  
 # -------------------------------
-check_root() {
-    [[ "${EUID:-$(id -u)}" -ne 0 ]] && echo "This script must be run as root." && exit 1
+# Helper: Query Prometheus Sources
+# -------------------------------
+query_prometheus_sources() {
+    local -a _found_sources=()
+    local _hc_file="healthcheck.conf"
+
+    gsc_log_info "Scanning for Prometheus data sources..."
+
+    # Check healthcheck.conf
+    if [[ -f "$_hc_file" ]]; then
+        local _hc_port
+        _hc_port=$(grep -E "^_prom_port=" "$_hc_file" | cut -d'"' -f2)
+        if [[ -n "$_hc_port" ]]; then
+            _found_sources+=("healthcheck.conf (Port: $_hc_port)")
+        fi
+    fi
+
+    # Scan running containers (try both podman and docker)
+    local _runtime
+    for _runtime in podman docker; do
+        if command -v "$_runtime" >/dev/null 2>&1; then
+            local _container_info
+            _container_info=$("$_runtime" ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep "9090" || true)
+
+            while IFS= read -r _line; do
+                [[ -z "$_line" ]] && continue
+                local _name="${_line%% *}"
+                local _ports="${_line#* }"
+                local _hp
+                # Extract host port from mapping (e.g., 0.0.0.0:9090->9090/tcp or 9090/tcp)
+                if [[ "$_ports" =~ :([0-9]+)-\>9090 ]]; then
+                    _hp="${BASH_REMATCH[1]}"
+                    _found_sources+=("Container: $_name (Port: $_hp)")
+                fi
+            done <<< "$_container_info"
+        fi
+    done
+
+    if [[ ${#_found_sources[@]} -eq 0 ]]; then
+        gsc_log_warn "No Prometheus sources found in containers or healthcheck.conf."
+        return 0
+    fi
+
+    gsc_log_info "Found Prometheus sources:"
+    for i in "${!_found_sources[@]}"; do
+        printf "  [%d] %s\n" "$i" "${_found_sources[$i]}"
+    done
+
+    local _choice
+    read -rp "Select a source [0-$((${#_found_sources[@]}-1))]: " _choice
+    if [[ ! "$_choice" =~ ^[0-9]+$ ]] || [[ "$_choice" -lt 0 ]] || [[ "$_choice" -ge ${#_found_sources[@]} ]]; then
+        gsc_log_warn "Invalid selection. Using default data source."
+        return 0
+    fi
+
+    local _selected_port
+    _selected_port=$(echo "${_found_sources[$_choice]}" | grep -oE "Port: [0-9]+" | cut -d' ' -f2)
+
+    local _selected_ip
+    read -rp "Enter Prometheus IP address [default: 127.0.0.1]: " _selected_ip
+    _selected_ip=${_selected_ip:-127.0.0.1}
+
+    _datasource_url="http://$_selected_ip:$_selected_port"
+    gsc_log_ok "Datasource set to: $_datasource_url"
+}
+
+# -------------------------------
+# Helper: Cleanup Grafana
+# -------------------------------
+cleanup_grafana() {
+    local _runtime="${_container_engine:-}"
+    if [[ -z "$_runtime" ]]; then
+        if command -v podman >/dev/null 2>&1; then _runtime="podman"; else _runtime="docker"; fi
+    fi
+    gsc_container_cleanup "${_runtime}" "^grafana$" "${_override_confirm}" "${_cleanup_volumes}"
 }
 
 # -------------------------------
@@ -161,7 +152,7 @@ check_root() {
 # -------------------------------
 validate_dashboards() {
     for _file in "${_dashboards[@]}"; do
-        [[ ! -f "$_file" ]] && echo "❌ Dashboard file not found: $_file" && exit 1
+        [[ ! -f "$_file" ]] && gsc_log_error "Dashboard file not found: $_file" && exit 1
     done
 }
 
@@ -175,7 +166,7 @@ extract_archive() {
         *.zip) unzip -o "$_archive" -d "$_dashboard_dir" ;;
         *.tar.gz) tar -xzf "$_archive" -C "$_dashboard_dir" ;;
         *.tar.xz) tar -xJf "$_archive" -C "$_dashboard_dir" ;;
-        *) echo "❌ Unsupported archive format: $_archive" && exit 1 ;;
+        *) gsc_log_error "Unsupported archive format: $_archive"; exit 1 ;;
     esac
 }
 
@@ -225,7 +216,7 @@ parse_args() {
                 _cleanup_volumes=1; shift ;;
             --override=y)
                 _override_confirm="y"; shift ;;
-            -*|--*) echo "❌ Unknown option: $1"; print_usage ;;
+            -*) gsc_log_error "Unknown option: $1"; print_usage ;;
         esac
     done
 }
@@ -235,7 +226,7 @@ parse_args() {
 # -------------------------------
 download_url() {
     if [[ -n "$_url" ]]; then
-        echo "📥 Downloading from URL: $_url"
+        gsc_log_info "Downloading from URL: $_url"
         mkdir -p temp_download
         curl -L -o temp_download/downloaded_file "$_url" || wget -O temp_download/downloaded_file "$_url"
         _dashboards+=("temp_download/downloaded_file")
@@ -247,8 +238,8 @@ download_url() {
 # -------------------------------
 clone_git_repo() {
     if [[ -n "$_git_repo" ]]; then
-        echo "Cloning Git repo: $_git_repo"
-        git clone "$_git_repo" temp_git || { echo "Git clone failed."; exit 1; }
+        gsc_log_info "Cloning Git repo: $_git_repo"
+        git clone "$_git_repo" temp_git || { gsc_log_error "Git clone failed."; exit 1; }
         local -a _repo_files=()
         mapfile -t _repo_files < <(find temp_git -type f -name '*.json')
         _dashboards+=("${_repo_files[@]}")
@@ -272,7 +263,7 @@ prepare_structure() {
         case "$_file" in
             *.json) cp "$_file" "$_dashboard_dir/" ;;
             *.zip|*.tar.gz|*.tar.xz) extract_archive "$_file" ;;
-            *) echo "❌ Unsupported file type: $_file" && exit 1 ;;
+            *) gsc_log_error "Unsupported file type: $_file"; exit 1 ;;
         esac
     done
 
@@ -326,7 +317,7 @@ launch_grafana() {
         docker compose up -d 2>>"$_error_log"
         sleep 5
         if ! docker ps | grep -q grafana; then
-            echo "❌ Docker failed to start Grafana. Cleaning up..." | tee -a "$_error_log"
+            gsc_log_error "Docker failed to start Grafana. Cleaning up..."
             docker compose down 2>>"$_error_log"
             docker image rm grafana/grafana:latest 2>>"$_error_log"
             exit 1
@@ -340,24 +331,24 @@ launch_grafana() {
             -v "$(pwd)/provisioning/dashboards:/etc/grafana/provisioning/dashboards:Z" \
             -v "$(pwd)/provisioning/datasources:/etc/grafana/provisioning/datasources:Z" \
             -e GF_SECURITY_ADMIN_USER=admin \
-            -e GF_SECURITY_ADMIN_PASSWORD=$_admin_password \
+            -e GF_SECURITY_ADMIN_PASSWORD="$_admin_password" \
             grafana/grafana:latest 2>>"$_error_log"
         sleep 5
         if ! podman ps | grep -q grafana; then
-            echo "❌ Podman failed to start Grafana. Cleaning up..." | tee -a "$_error_log"
+            gsc_log_error "Podman failed to start Grafana. Cleaning up..."
             podman rm -f grafana 2>>"$_error_log"
             podman image rm grafana/grafana:latest 2>>"$_error_log"
             exit 1
         fi
     fi
-    echo "✅ Grafana setup complete. Access it at http://localhost:$_grafana_port"
+    gsc_log_ok "Grafana setup complete. Access it at http://localhost:$_grafana_port"
 }
 
 
 # -------------------------------
 # Main
 # -------------------------------
-check_root
+gsc_require_root
 parse_args "$@"
 
 if [[ "$_cleanup_mode" -eq 1 ]]; then
@@ -368,9 +359,9 @@ fi
 [[ "$_query_mode" -eq 1 ]] && query_prometheus_sources
 download_url
 clone_git_repo
-[[ -z "$_container_engine" ]] && echo "❌ Must specify --docker or --podman" && print_usage
+[[ -z "$_container_engine" ]] && gsc_log_error "Must specify --docker or --podman" && print_usage
 if [[ $_update_dashboards -eq 0 && ${#_dashboards[@]} -eq 0 ]]; then
-    echo "❌ At least one dashboard file must be specified with -D, --url, or --git (or use --update to use existing ones)"
+    gsc_log_error "At least one dashboard file must be specified with -D, --url, or --git (or use --update to use existing ones)"
     print_usage
 fi
 validate_dashboards

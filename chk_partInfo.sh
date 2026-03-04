@@ -202,10 +202,7 @@ if [[ "${_threshold_file}" == "" ]]; then
     gsc_log_warn "WARNING: CANNOT FIND ${_default_threshold_file_short} threshold file in ${_log_dir} directory."
 fi
 
-# Check if output file exists and if so, rename it
-if [[ -f ${_output_file} ]]; then
-    mv ${_output_file} ${_output_file}.bak
-fi
+gsc_rotate_log "${_output_file}"
 
 if [[ "${_input_file_map}" != "" ]]; then
     gsc_log_debug "==== Search for Leader in ${_input_file_map} map file"

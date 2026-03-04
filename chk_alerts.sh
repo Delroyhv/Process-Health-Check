@@ -84,10 +84,7 @@ if [[ "${_log_dir}" != "" && ! -d ${_log_dir} ]]; then
     exit
 fi
 
-# Check if output file exists and if so, rename it
-if [[ -f ${_output_file} ]]; then
-    mv ${_output_file} ${_output_file}.bak
-fi
+gsc_rotate_log "${_output_file}"
 
 
 #########################

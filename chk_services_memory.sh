@@ -223,9 +223,7 @@ if [[ ! -f ${_mem_config_required_file} ]]; then
     exit 1
 fi
 
-if [[ -f ${_output_file} ]]; then
-    mv "${_output_file}" "${_output_file}.bak"
-fi
+gsc_rotate_log "${_output_file}"
 
 
 if [[ "${_forced_node_mem}" != "true" ]]; then

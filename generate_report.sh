@@ -7,7 +7,7 @@
 
 _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-[[ -r "${_script_dir}/gsc_core.sh" ]] && . "${_script_dir}/gsc_core.sh"
+. "${_script_dir}/gsc_core.sh"
 
 _report_file="health_report.md"
 _log_dir="."
@@ -43,20 +43,23 @@ _s3_nodes=$(grep -h "S3GW instances:" health_report_services_instances.log 2>/de
 _dls_nodes=$(grep -h "DLS instances:" health_report_services_instances.log 2>/dev/null | cut -d: -f2 | xargs || echo "N/A")
 
 _issues_filter='^health_report_messages\.log:|was modified on node [^ ]+|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source(s) fully reachable|^[[:space:]]*[0-9]+ [0-9.]+\s*\[(CRITICAL|WARNING|DANGER|good)\]'
-_issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" | wc -l || echo 0)
+_issues_count=$(grep -E "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Evc "${_issues_filter}" || echo 0)
 
 # Metrics specific summary
-_metric_logs=$(ls health_report_metrics_*.log 2>/dev/null || true)
+_metric_logs=()
+for _f in health_report_metrics_*.log; do
+    [[ -f "$_f" ]] && _metric_logs+=("$_f")
+done
 _m_critical=0
 _m_error=0
 _m_warning=0
 _m_alert=0
 
-if [[ -n "${_metric_logs}" ]]; then
-    _m_critical=$(grep -h "CRITICAL" ${_metric_logs} | wc -l)
-    _m_error=$(grep -h "ERROR" ${_metric_logs} | grep -v "CRITICAL" | wc -l)
-    _m_warning=$(grep -h "WARNING" ${_metric_logs} | wc -l)
-    _m_alert=$(grep -h "ALERT" ${_metric_logs} | wc -l)
+if [[ ${#_metric_logs[@]} -gt 0 ]]; then
+    _m_critical=$(grep -hc "CRITICAL" "${_metric_logs[@]}")
+    _m_error=$(grep -h "ERROR" "${_metric_logs[@]}" | grep -vc "CRITICAL")
+    _m_warning=$(grep -hc "WARNING" "${_metric_logs[@]}")
+    _m_alert=$(grep -hc "ALERT" "${_metric_logs[@]}")
 fi
 
 # 2. Generate Markdown
@@ -126,4 +129,4 @@ fi
     fi
 } > "${_report_file}"
 
-echo "✅ Report generated: ${_report_file}"
+gsc_log_ok "Report generated: ${_report_file}"

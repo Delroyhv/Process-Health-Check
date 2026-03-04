@@ -45,15 +45,6 @@ gsc_require_root() {
 }
 
 # -----------------------------
-# Strict Mode Helper
-# -----------------------------
-# Call this at the start of any script that sources gsc_core.sh
-gsc_strict_mode() {
-  set -euo pipefail
-  IFS=$'\n\t'
-}
-
-# -----------------------------
 # Logging
 # -----------------------------
 _gsc_enable_color=1
@@ -107,7 +98,7 @@ _gsc_spinner_idx=0
 gsc_spinner() {
   local -a _spin=("-" "\\" "|" "/")
   echo -ne "${_spin[$((_gsc_spinner_idx % 4))]} \r" >&2
-  ((_gsc_spinner_idx++))
+  ((_gsc_spinner_idx++)) || true
 }
 
 # -----------------------------
@@ -175,11 +166,6 @@ gsc_is_float() {
 
 gsc_is_json() {
   printf '%s\n' "${1:-}" | jq -e . >/dev/null 2>&1 && printf 'true\n' || printf 'false\n'
-}
-
-gsc_json_escape() {
-  local _text="$1"
-  printf '"%s"' "$(printf '%s' "${_text}" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
 
 # -----------------------------
@@ -273,12 +259,6 @@ gsc_truncate_log() {
 # Temporary directory management
 # -----------------------------
 _gsc_tmp_dirs=()
-gsc_mktempdir() {
-  local _d=$(mktemp -d 2>/dev/null || echo "/tmp/gsc.$$.$RANDOM")
-  mkdir -p "${_d}"
-  _gsc_tmp_dirs+=("${_d}")
-  printf '%s\n' "${_d}"
-}
 gsc_add_tmp_dir() { [[ -d "$1" ]] && _gsc_tmp_dirs+=("$1"); }
 gsc_cleanup() {
   for _d in "${_gsc_tmp_dirs[@]:-}"; do rm -rf -- "${_d}" 2>/dev/null || true; done
@@ -436,19 +416,29 @@ gsc_pretty_bytes() {
   echo "${_val}${_units[$i]}" | sed 's/\.0//'
 }
 
-gsc_parse_bytes_to_kb() {
+# Convert human-readable size (e.g. 10G, 50M, 512KB) to KB.
+# Raw numbers: >2000000 assumed KB (large KiB value), else assumed MB.
+gsc_to_kb() {
     local _size="$1"
-    if [[ "${_size}" =~ ^([0-9.]+)([KMGTPEZY]?B?)$ ]]; then
-        local _val="${BASH_REMATCH[1]}"
-        local _unit="${BASH_REMATCH[2]%B}"
-        case "${_unit}" in
-            K) echo "${_val}" ;;
-            M) echo "scale=0; ${_val} * 1024 / 1" | bc ;;
-            G) echo "scale=0; ${_val} * 1024 * 1024 / 1" | bc ;;
-            T) echo "scale=0; ${_val} * 1024^2 * 1024 / 1" | bc ;;
-            *) echo "${_val}" ;;
-        esac
-    else echo "0"; fi
+    local _value _unit
+    if [[ "${_size}" =~ ([0-9.]+)([KMGTPEZY]?B?) ]]; then
+        _value="${BASH_REMATCH[1]}"
+        _unit="${BASH_REMATCH[2]}"
+    elif [[ "${_size}" =~ ([0-9.]+) ]]; then
+        _value="${BASH_REMATCH[1]}"
+        if (( $(echo "$_value > 2000000" | bc -l) )); then
+            _unit="KB"
+        else
+            _unit="MB"
+        fi
+    fi
+    case "${_unit}" in
+        "KB"|"K"|"") echo "$_value" ;;
+        "MB"|"M") echo "$((_value * 1024))" ;;
+        "GB"|"G") echo "$((_value * 1024 * 1024))" ;;
+        "TB"|"T") echo "$((_value * 1024 * 1024 * 1024))" ;;
+        *) echo "0" ;;
+    esac
 }
 
 # -----------------------------
@@ -458,7 +448,6 @@ gsc_get_date_format() {
   local _ts="${1:-$(date +%s)}"
   date -u -d "@${_ts}" +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "${_ts}" +'%Y-%m-%dT%H:%M:%SZ'
 }
-gsc_timestamp() { date +%Y-%m-%dT%H:%M:%S%z; }
 
 # -----------------------------
 # Container Port Helpers
@@ -552,7 +541,6 @@ setLogFile() { local _f="$1"; [[ "$_f" == *.log ]] || _f="${_f}.log"; _log_file_
 log()  { printf '%s\n' "$1" > "${_log_file_name}" 2>/dev/null || true; }
 loga() { printf '%s\n' "$1" >> "${_log_file_name}" 2>/dev/null || true; }
 log2()  { gsc_log_info "$1"; printf '%s\n' "$1" > "${_log_file_name}" 2>/dev/null || true; }
-log2a() { gsc_log_info "$1"; printf '%s\n' "$1" >> "${_log_file_name}" 2>/dev/null || true; }
 getOptions() {
   local _opt; OPTIND=1
   while getopts "c:u:p:r:d:v:s:w:h:f:n:" _opt; do
@@ -571,7 +559,6 @@ handleBasicOptions() {
 }
 createDir() { [[ ! -d "${_dir_name}" ]] && mkdir -p "${_dir_name}" || true; }
 hcpcs_json_body_from_file() { local _file="$1"; [[ -r "${_file}" ]] || return 1; sed -n '/^[[:space:]]*[{[]/,$p' "${_file}"; }
-hcpcs_json_is_valid() { local _file="$1"; [[ -s "${_file}" ]] || return 1; hcpcs_json_body_from_file "${_file}" | jq empty >/dev/null 2>&1; }
 
 # Auto-setup _log_file_name
 if [[ -z "${_log_file_name:-}" ]]; then
