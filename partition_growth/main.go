@@ -289,6 +289,17 @@ func main() {
         }
         fmt.Println()
 
+        fmt.Println("--- Monthly Partition Growth ---")
+        ms := make([]string, 0, len(perMonth))
+        for m := range perMonth {
+            ms = append(ms, m)
+        }
+        sort.Strings(ms)
+        for _, m := range ms {
+            fmt.Printf("%s: %d splits\n", m, perMonth[m])
+        }
+        fmt.Println()
+
         fmt.Println("--- Last 30 Days Partition Growth ---")
         if len(allDates) > 0 {
             sort.Slice(allDates, func(i, j int) bool { return allDates[i].After(allDates[j]) })
