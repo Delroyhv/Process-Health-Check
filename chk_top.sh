@@ -136,81 +136,21 @@ for _file in "${_top_files[@]}"; do
         printf '\n'
     } >> "${_top_log}"
 
-    # Parse all iterations with a single awk pass
-    # Extracts: uptime days, last load avg, avg cpu fields, last mem/swap/tasks
-    read -r _updays _load1 _load5 _load15 \
-             _avg_us _avg_sy _avg_id _avg_wa \
-             _mem_total _mem_used \
-             _swap_used \
-             _tasks _zombies \
-        < <(awk '
-        /^top -/ {
-            # uptime: "up N days" or "up N:MM" or "up N min"
-            if ($0 ~ /up [0-9]+ day/) {
-                for(i=1;i<=NF;i++) if($i=="day"||$i=="days") {updays=$(i-1); break}
-            } else updays=0
-            # load averages (last 3 numbers before end of line)
-            n=split($0,f,",")
-            load15=f[n]+0; gsub(/[^0-9.]/,"",load15)
-            load5=f[n-1]+0; gsub(/[^0-9.]/,"",load5)
-            # load1 is between "load average:" and first comma
-            idx=index($0,"load average: ")
-            if(idx){
-                s=substr($0,idx+14)
-                split(s,g,",")
-                load1=g[1]+0
-            }
-        }
-        /^%Cpu/ {
-            # parse each tagged field
-            n=split($0,f,",")
-            for(i=1;i<=n;i++){
-                v=f[i]; gsub(/[^0-9.a-z]/,"",v)
-                if(v~/us$/) { gsub(/us/,"",v); sum_us+=v; cnt_us++ }
-                if(v~/sy$/) { gsub(/sy/,"",v); sum_sy+=v; cnt_sy++ }
-                if(v~/id$/) { gsub(/id/,"",v); sum_id+=v; cnt_id++ }
-                if(v~/wa$/) { gsub(/wa/,"",v); sum_wa+=v; cnt_wa++ }
-            }
-        }
-        /^MiB Mem/ {
-            for(i=1;i<=NF;i++){
-                if($i=="total") mem_total=$(i-1)+0
-                if($i=="used") mem_used=$(i-1)+0
-            }
-        }
-        /^MiB Swap/ {
-            for(i=1;i<=NF;i++) if($i=="used") swap_used=$(i-1)+0
-        }
-        /^Tasks:/ {
-            for(i=1;i<=NF;i++){
-                if($i=="total") tasks=$(i-1)+0
-                if($i=="zombie") zombies=$(i-1)+0
-            }
-        }
-        END {
-            avg_us = (cnt_us>0) ? sum_us/cnt_us : 0
-            avg_sy = (cnt_sy>0) ? sum_sy/cnt_sy : 0
-            avg_id = (cnt_id>0) ? sum_id/cnt_id : 0
-            avg_wa = (cnt_wa>0) ? sum_wa/cnt_wa : 0
-            mem_pct = (mem_total>0) ? (mem_used/mem_total)*100 : 0
-            printf "%s %s %s %s %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f\n",
-                updays, load1, load5, load15,
-                avg_us, avg_sy, avg_id, avg_wa,
-                mem_pct, mem_total, swap_used,
-                tasks, zombies
-        }
-        ' "${_file}")
-
-    _mem_pct="${_avg_id}"   # reuse slot — mem_pct is field 9
-    # Reparse cleanly (awk printed: updays load1 load5 load15 us sy id wa mem_pct mem_total swap tasks zombies)
-    read -r _updays _load1 _load5 _load15 \
+    # Parse all iterations with a single awk pass.
+    # IFS=' ' is required: gsc_core.sh sets IFS=$'\n\t' which would prevent space-splitting.
+    # Field matching strips trailing punctuation (top uses "total," "used," "used." etc.)
+    # %Cpu prefix "%Cpu(s): " is stripped from the first comma-split field before parsing.
+    IFS=' ' read -r _updays _load1 _load5 _load15 \
              _avg_us _avg_sy _avg_id _avg_wa \
              _mem_pct _mem_total _swap_used \
              _tasks _zombies \
         < <(awk '
         /^top -/ {
             if ($0 ~ /up [0-9]+ day/) {
-                for(i=1;i<=NF;i++) if($i=="day"||$i=="days") {updays=$(i-1); break}
+                for(i=1;i<=NF;i++) {
+                    tmp=$i; sub(/,$/,"",tmp)
+                    if(tmp=="day"||tmp=="days") {updays=$(i-1); break}
+                }
             } else updays=0
             idx=index($0,"load average: ")
             if(idx){
@@ -222,7 +162,9 @@ for _file in "${_top_files[@]}"; do
         /^%Cpu/ {
             n=split($0,f,",")
             for(i=1;i<=n;i++){
-                v=f[i]; gsub(/[^0-9.a-z]/,"",v)
+                v=f[i]
+                if(i==1) sub(/^[^:]+:[[:space:]]*/,"",v)
+                gsub(/[^0-9.a-z]/,"",v)
                 if(v~/us$/) { gsub(/us/,"",v); sum_us+=v; cnt++ }
                 if(v~/sy$/) { gsub(/sy/,"",v); sum_sy+=v }
                 if(v~/id$/) { gsub(/id/,"",v); sum_id+=v }
@@ -231,15 +173,22 @@ for _file in "${_top_files[@]}"; do
         }
         /^MiB Mem/ {
             for(i=1;i<=NF;i++){
-                if($i=="total") mem_total=$(i-1)+0
-                if($i=="used") mem_used=$(i-1)+0
+                tmp=$i; sub(/[^[:alpha:]]+$/,"",tmp)
+                if(tmp=="total") mem_total=$(i-1)+0
+                if(tmp=="used")  mem_used=$(i-1)+0
             }
         }
-        /^MiB Swap/ { for(i=1;i<=NF;i++) if($i=="used") swap_used=$(i-1)+0 }
-        /^Tasks:/   {
+        /^MiB Swap/ {
+            for(i=1;i<=NF;i++) {
+                tmp=$i; sub(/[^[:alpha:]]+$/,"",tmp)
+                if(tmp=="used") swap_used=$(i-1)+0
+            }
+        }
+        /^Tasks:/ {
             for(i=1;i<=NF;i++){
-                if($i=="total") tasks=$(i-1)+0
-                if($i=="zombie") zombies=$(i-1)+0
+                tmp=$i; sub(/[^[:alpha:]]+$/,"",tmp)
+                if(tmp=="total")  tasks=$(i-1)+0
+                if(tmp=="zombie") zombies=$(i-1)+0
             }
         }
         END {
@@ -274,49 +223,49 @@ for _file in "${_top_files[@]}"; do
 
     # Load average (1-minute) — integer compare via awk
     if awk "BEGIN{exit !( ${_load1} > ${_LOAD_CRIT} )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "CRITICAL: ${_node}: load average ${_load1} exceeds critical threshold (>${_LOAD_CRIT}) — CPU saturated"
     elif awk "BEGIN{exit !( ${_load1} > ${_LOAD_WARN} )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "WARNING: ${_node}: load average ${_load1} exceeds warning threshold (>${_LOAD_WARN})"
     fi
 
     # CPU idle — WARNING/CRITICAL for low idle
     if awk "BEGIN{exit !( ${_avg_id} < ${_IDLE_CRIT} )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "CRITICAL: ${_node}: CPU idle ${_avg_id}% below critical threshold (<${_IDLE_CRIT}%) — CPU critically high"
     elif awk "BEGIN{exit !( ${_avg_id} < ${_IDLE_WARN} )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "WARNING: ${_node}: CPU idle ${_avg_id}% below warning threshold (<${_IDLE_WARN}%)"
     fi
 
     # I/O wait
     if awk "BEGIN{exit !( ${_avg_wa} > ${_WAIT_CRIT} )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "CRITICAL: ${_node}: CPU iowait ${_avg_wa}% exceeds critical threshold (>${_WAIT_CRIT}%) — severe disk I/O bottleneck"
     elif awk "BEGIN{exit !( ${_avg_wa} > ${_WAIT_WARN} )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "WARNING: ${_node}: CPU iowait ${_avg_wa}% exceeds warning threshold (>${_WAIT_WARN}%) — disk I/O bottleneck"
     fi
 
     # Memory used %
     if awk "BEGIN{exit !( ${_mem_pct} > ${_MEM_CRIT} )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "CRITICAL: ${_node}: memory used ${_mem_pct}% exceeds critical threshold (>${_MEM_CRIT}%)"
     elif awk "BEGIN{exit !( ${_mem_pct} > ${_MEM_WARN} )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "WARNING: ${_node}: memory used ${_mem_pct}% exceeds warning threshold (>${_MEM_WARN}%)"
     fi
 
     # Swap usage
     if awk "BEGIN{exit !( ${_swap_used} > 0 )}"; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "WARNING: ${_node}: swap in use (${_swap_mb} MiB) — memory pressure may cause performance degradation"
     fi
 
     # Zombie processes
     if [[ "${_zombies}" -gt 0 ]]; then
-        ((_node_issues++)); ((_err++))
+        : $(( _node_issues++ )) $(( _err++ ))
         gsc_loga "WARNING: ${_node}: ${_zombies} zombie process(es) — parent process not reaping children"
     fi
 
