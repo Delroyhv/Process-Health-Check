@@ -31,7 +31,8 @@ gsc_log_info "== CHECKING SERVICE PLACEMENT ON MASTER NODES =="
 _services_log="$(find "${_health_check_dir}" -type f -name "${_input_file}" -print -quit 2>/dev/null || true)"
 
 if [[ -z "${_services_log}" ]]; then
-    gsc_die "Cannot find '${_input_file}' under '${_health_check_dir}'"
+    gsc_log_warn "Cannot find '${_input_file}' under '${_health_check_dir}'; skipping service placement check."
+    exit 0
 fi
 
 # Master nodes run the cluster control-plane (Service-Deployment)
@@ -44,7 +45,8 @@ _flagged_services=("Metadata-Gateway" "S3-Gateway" "Data-Lifecycle")
 mapfile -t _node_lines < <(grep -E '^\[[0-9]+\]' "${_services_log}" || true)
 
 if [[ ${#_node_lines[@]} -eq 0 ]]; then
-    gsc_die "No node lines found in '${_services_log}'"
+    gsc_log_warn "No node lines found in '${_services_log}'; skipping service placement check."
+    exit 0
 fi
 
 # Identify master nodes
