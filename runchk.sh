@@ -201,7 +201,7 @@ fi
 
 # ── Final Report ─────────────────────────────────────────────────────────────
 if [[ -n "${_report_file}" ]]; then
-    "${_script_dir}/generate_report.sh" -o "${_report_file}" -d .
+    "${_script_dir}/gsc_healthcheck_report.sh" -o "${_report_file}" -d .
 fi
 
 # ── Final Summary ────────────────────────────────────────────────────────────
