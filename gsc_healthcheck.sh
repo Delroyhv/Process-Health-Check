@@ -122,9 +122,10 @@ main() {
   local _expand_cmd=("${_script_dir}/expand_hcpcs_support.sh")
   [[ -n "${_support_log}" ]] && _expand_cmd+=("-f" "${_support_log}")
   
-  local _tmp_out
-  _tmp_out=$(mktemp)
-  gsc_add_tmp_dir "$(dirname "${_tmp_out}")" # will be cleaned up by gsc_cleanup
+  local _tmp_dir _tmp_out
+  _tmp_dir=$(mktemp -d)
+  gsc_add_tmp_dir "${_tmp_dir}"              # will be cleaned up by gsc_cleanup
+  _tmp_out="${_tmp_dir}/expand.out"
 
   ( "${_expand_cmd[@]}" ) 2>&1 | tee "${_tmp_out}" || gsc_log_info "Expansion step finished."
 

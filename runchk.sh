@@ -106,43 +106,43 @@ gsc_log_info "# RUN get_partition_tool_info.sh"
 gsc_log_info "# RUN chk_partInfo.sh"
 "${_script_dir}/chk_partInfo.sh" -d . 2>&1 | tee -a "${_tmp_report_output}" || true
 
-gsc_log_info "# RUN get_partition_details.sh"
-"${_script_dir}/get_partition_details.sh" . 2>&1 | tee health_report_partition_details.log | tee -a "${_tmp_report_output}" || true
-
 # ── Partition Growth Chart ───────────────────────────────────────────────────
-_max_partitions=$(grep -E "^[[:space:]]*[0-9]+ [0-9.]+" health_report_partition_details.log 2>/dev/null | awk '{print $1}' | sort -rn | head -n 1 || echo 0)
-if [[ "${_max_partitions}" -gt 1500 ]]; then
-    gsc_log_info "High partition count detected (${_max_partitions}). Generating growth chart..."
-    _part_json="supportLogs/partitionSplit.json"
-    [[ ! -f "${_part_json}" ]] && _part_json=$(find . -name partitionSplit.json -print -quit 2>/dev/null || echo "")
-    _pg_bin="${_script_dir}/partition_growth/build/partition_growth-linux-amd64"
-    _pg_plot="${_script_dir}/partition_growth/plot.gp"
-    if [[ -n "${_part_json}" && -f "${_part_json}" && -x "${_pg_bin}" && -f "${_pg_plot}" ]]; then
-        if command -v gnuplot >/dev/null 2>&1; then
-            "${_pg_bin}" -f "${_part_json}" -a > partition_growth_chart.log 2>/dev/null || true
-            gnuplot "${_pg_plot}" >> partition_growth_chart.log 2>/dev/null || true
-            if [[ -s partition_growth_chart.log ]]; then
-                gsc_log_info "Partition growth charts and rates generated: partition_growth_chart.log"
-                # If not reporting, print the summaries to the screen
-                if [[ -z "${_report_file}" ]]; then
-                    sed -n '/--- Yearly/,/Grand Total/p' partition_growth_chart.log
-                fi
-            fi
-        else
-            gsc_log_warn "gnuplot not found; skipping partition growth chart generation."
-            # Still run the binary to get text-based rates if gnuplot is missing
-            "${_pg_bin}" -f "${_part_json}" -a > partition_growth_chart.log 2>/dev/null || true
-            if [[ -s partition_growth_chart.log ]]; then
-                gsc_log_info "Partition growth rates generated (no charts): partition_growth_chart.log"
-                if [[ -z "${_report_file}" ]]; then
-                    sed -n '/--- Yearly/,/Grand Total/p' partition_growth_chart.log
-                fi
-            fi
+# Run before get_partition_details.sh so avg_monthly_growth is available for sizing output.
+_part_json="supportLogs/partitionSplit.json"
+[[ ! -f "${_part_json}" ]] && _part_json=$(find . -name partitionSplit.json -print -quit 2>/dev/null || echo "")
+_pg_bin="${_script_dir}/partition_growth/build/partition_growth-linux-amd64"
+_pg_plot="${_script_dir}/partition_growth/plot.gp"
+if [[ -n "${_part_json}" && -f "${_part_json}" && -x "${_pg_bin}" ]]; then
+    "${_pg_bin}" -f "${_part_json}" -a > partition_growth_chart.log 2>/dev/null || true
+    if command -v gnuplot >/dev/null 2>&1 && [[ -f "${_pg_plot}" ]]; then
+        gnuplot "${_pg_plot}" > partition_growth_plot.log 2>/dev/null || true
+        if [[ -s partition_growth_plot.log ]]; then
+            gsc_log_info "Partition growth plots generated: partition_growth_plot.log"
         fi
     else
-        gsc_log_warn "Missing partition_growth artifacts or JSON; skipping growth rate calculation."
+        {
+            echo "Partition growth plots could not be generated."
+            echo ""
+            echo "Requirements to enable ASCII partition growth plots:"
+            echo "  - gnuplot-nox  (install: sudo dnf install gnuplot-nox)"
+            echo ""
+            echo "The plot script used is: ${_pg_plot}"
+            echo "Once gnuplot is installed, re-run runchk.sh to generate plots."
+        } > partition_growth_plot.log
+        gsc_log_warn "gnuplot not found — plot requirements logged to partition_growth_plot.log"
     fi
+    if [[ -s partition_growth_chart.log ]]; then
+        gsc_log_info "Partition growth rates generated: partition_growth_chart.log"
+        if [[ -z "${_report_file}" ]]; then
+            sed -n '/--- Yearly/,/Grand Total/p' partition_growth_chart.log
+        fi
+    fi
+else
+    gsc_log_warn "partitionSplit.json or partition_growth binary not found; skipping growth rate calculation."
 fi
+
+gsc_log_info "# RUN get_partition_details.sh"
+"${_script_dir}/get_partition_details.sh" . 2>&1 | tee health_report_partition_details.log | tee -a "${_tmp_report_output}" || true
 
 gsc_log_info "# RUN chk_buckets.sh"
 "${_script_dir}/chk_buckets.sh" --bucket-owner 2>&1 | tee -a "${_tmp_report_output}" || true
@@ -173,13 +173,28 @@ gsc_log_info "# RUN chk_snodes.sh"
 gsc_log_info "# RUN chk_services_memory.sh"
 "${_script_dir}/chk_services_memory.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
 
-if [[ "${_no_metrics}" -eq 0 ]]; then
+if [[ "${_no_metrics}" -eq 1 ]]; then
+    gsc_log_warn "# SKIP chk_metrics.sh: Prometheus host not found in healthcheck.conf"
+elif [[ "${_no_metrics}" -eq 0 ]]; then
     # Prefer values from healthcheck.conf if they were sourced, otherwise fallback to defaults
     _prom_host="${_prom_server:-${PROM_CMD_PARAM_DAILY:-}}"
     _prom_p="${_prom_port:-9090}"
-    
-    if [[ -n "${_prom_host}" ]]; then
-        if [[ -n "${PROM_CMD_PARAM_HOURLY:-}" ]]; then
+    _prom_proto="${_prom_protocol:-http}"
+
+    if [[ -z "${_prom_host}" ]]; then
+        gsc_log_warn "# SKIP chk_metrics.sh: Prometheus host not found in healthcheck.conf"
+    else
+        # Probe Prometheus before running metrics checks
+        _prom_reachable=0
+        if curl -sf --max-time 5 "${_prom_proto}://${_prom_host}:${_prom_p}/-/ready" >/dev/null 2>&1; then
+            _prom_reachable=1
+        elif curl -sf --max-time 5 "http://${_prom_host}:${_prom_p}/-/ready" >/dev/null 2>&1; then
+            _prom_reachable=1
+        fi
+
+        if [[ "${_prom_reachable}" -eq 0 ]]; then
+            gsc_log_warn "# SKIP chk_metrics.sh: Prometheus at ${_prom_host}:${_prom_p} is not reachable"
+        elif [[ -n "${PROM_CMD_PARAM_HOURLY:-}" ]]; then
             gsc_log_info "# RUN chk_metrics.sh (using PROM_CMD_PARAM_HOURLY from ${_config_file})"
             IFS=' ' read -ra _chk_metrics_args <<< "${PROM_CMD_PARAM_HOURLY}"
             # Fix json path: if the specified file doesn't exist, look for it alongside the scripts
@@ -194,8 +209,6 @@ if [[ "${_no_metrics}" -eq 0 ]]; then
             gsc_log_info "# RUN chk_metrics.sh on ${_prom_host}:${_prom_p}"
             "${_script_dir}/chk_metrics.sh" -c "${_prom_host}" -n "${_prom_p}" 2>&1 | tee -a "${_tmp_report_output}" || true
         fi
-    else
-        gsc_log_warn "# SKIP chk_metrics.sh: Prometheus host not found in ${_config_file}"
     fi
 fi
 
@@ -208,8 +221,8 @@ fi
 _end_epoch=$(date -u +%s)
 _elapsed=$(( _end_epoch - _current_time_epoch ))
 
-_issues_filter='^health_report_messages\.log:|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source.s. fully reachable|^[[:space:]]*[0-9]+ [0-9.]+[[:space:]]*\[(CRITICAL|WARNING|DANGER|good)\]'
-_all_issues=$(grep -hE "ERROR|WARNING|CRITICAL|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" || true)
+_issues_filter='^health_report_messages\.log:|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source.s. fully reachable|^[[:space:]]*[0-9]+ [0-9.]+[[:space:]]*\[(CRITICAL|WARNING|DANGER|good)\]|^[[:space:]]*[0-9]+-[0-9]+[[:space:]]*:[[:space:]]*\[(WARNING|DANGER|CRITICAL|good)\]'
+_all_issues=$(grep -hE "ERROR|WARNING|CRITICAL|DANGER|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" || true)
 _issues_count=$(printf '%s\n' "${_all_issues}" | grep -c . 2>/dev/null || echo 0)
 
 gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
@@ -217,13 +230,18 @@ gsc_log_info "SUMMARY: ${_issues_count} issue(s) found | Elapsed: ${_elapsed}s"
 gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
 
 _critical_issues=$(printf '%s\n' "${_all_issues}" | grep -E "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' || true)
-_error_issues=$(printf '%s\n' "${_all_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' || true)
-_warning_issues=$(printf '%s\n' "${_all_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|ERROR" | sed 's/^health_report_[^:]*://' || true)
-_action_issues=$(printf '%s\n' "${_all_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|ERROR|WARNING" | sed 's/^health_report_[^:]*://' || true)
+_danger_issues=$(printf '%s\n' "${_all_issues}" | grep "DANGER" | grep -vE "CRITICAL|ALERT" | sed 's/^health_report_[^:]*://' || true)
+_error_issues=$(printf '%s\n' "${_all_issues}" | grep "ERROR" | grep -vE "CRITICAL|ALERT|DANGER" | sed 's/^health_report_[^:]*://' || true)
+_warning_issues=$(printf '%s\n' "${_all_issues}" | grep "WARNING" | grep -vE "CRITICAL|ALERT|DANGER|ERROR" | sed 's/^health_report_[^:]*://' || true)
+_action_issues=$(printf '%s\n' "${_all_issues}" | grep "ACTION" | grep -vE "CRITICAL|ALERT|DANGER|ERROR|WARNING" | sed 's/^health_report_[^:]*://' || true)
 
 if [[ -n "${_critical_issues}" ]]; then
     gsc_log_info "++++++++++ CRITICAL / ALERT ++++++++++"
     while IFS= read -r _ln; do [[ -n "${_ln}" ]] && gsc_log_critical "${_ln}"; done <<< "${_critical_issues}"
+fi
+if [[ -n "${_danger_issues}" ]]; then
+    gsc_log_info "++++++++++ DANGER ++++++++++"
+    while IFS= read -r _ln; do [[ -n "${_ln}" ]] && gsc_log_error "${_ln}"; done <<< "${_danger_issues}"
 fi
 if [[ -n "${_error_issues}" ]]; then
     gsc_log_info "++++++++++ ERROR ++++++++++"

@@ -49,12 +49,23 @@ fi
 
 # Extract split threshold from info log if available
 _split_threshold=""
-_monthly_growth=0
 if [[ -n "${_info_log:-}" ]]; then
     _split_threshold=$(grep "Partition split thresholds (largest:" "${_info_log}" 2>/dev/null | sed -n 's/.*largest: \([^)]*\)).*/\1/p' || true)
-    # Get last growth line from "Per month:" section
-    _monthly_growth=$(grep -A 30 "Per month:" "${_info_log}" 2>/dev/null | grep "[0-9]\{4\}-[0-9]\{2\}:" | tail -n 1 | awk '{print $NF}' || echo 0)
 fi
+
+# Get avg_monthly_growth from partition_growth_chart.log (written by runchk.sh)
+_monthly_growth=0
+_pg_chart="${_search_base}/partition_growth_chart.log"
+if [[ -f "${_pg_chart}" ]]; then
+    _monthly_growth=$(grep "^avg_monthly_growth:" "${_pg_chart}" | awk '{print $2}' || true)
+fi
+# Fallback: last monthly entry from info log
+if [[ -z "${_monthly_growth}" || "${_monthly_growth}" == "0" ]]; then
+    if [[ -n "${_info_log:-}" ]]; then
+        _monthly_growth=$(grep -A 30 "Per month:" "${_info_log}" 2>/dev/null | grep "[0-9]\{4\}-[0-9]\{2\}:" | tail -n 1 | awk '{print $NF}' || echo 0)
+    fi
+fi
+_monthly_growth="${_monthly_growth:-0}"
 
 # Check if we should use color (from gsc_core.sh logic)
 _use_color=0
@@ -107,9 +118,12 @@ check_service_placement() {
     fi
 }
 
-_results=$(awk -v st_val="${_split_threshold}" -v use_color="${_use_color}" -v growth="${_monthly_growth}" '
+_bad_partitions_log="${_search_base}/bad_partitions_analysis.log"
+: > "${_bad_partitions_log}"
+
+_results=$(awk -v st_val="${_split_threshold}" -v use_color="${_use_color}" -v growth="${_monthly_growth}" -v bad_log="${_bad_partitions_log}" '
 BEGIN {
-    in_s1 = 0; in_s2 = 0; in_cp = 0; in_lc = 0
+    in_s1 = 0; in_s2 = 0; in_cp = 0; in_lc = 0; in_found = 0
     t_w = 1000; t_d = 1500; t_c = 2000
     m1 = "###### partitionMap Metadata-Coordination #######"
     m2 = "###### partitionState bad partitions analysis #######"
@@ -224,8 +238,57 @@ in_s1 {
 # Section 2 processing
 in_s2 {
     if ($0 ~ /^##/) next
-    if ($0 ~ /^[[:space:]]*$/) next
-    print "  " $0
+
+    # "Found N partitions..." — classify severity, print with level+action to screen,
+    # then redirect all following detail lines to bad_partitions_analysis.log
+    if ($0 ~ /^Found /) {
+        in_found = 1
+        sev = ""; col = ""; act = ""
+        if ($0 ~ /overprotection/) {
+            sev = "[WARNING ]"; col = C_WARN
+            act = "Monitor partition count over the next few days. If count does not decrease, contact ASPSUS for process to remove overprotected partitions."
+        } else if ($0 ~ /underprotection/) {
+            sev = "[DANGER  ]"; col = C_DANGER
+            act = "Contact ASPSUS — underprotected partitions are at risk of data loss."
+        } else if ($0 ~ /unprotection/) {
+            sev = "[CRITICAL]"; col = C_CRIT
+            act = "Contact ASPSUS — unprotected partitions require immediate action."
+        } else if ($0 ~ /orphaned/) {
+            sev = "[WARNING ]"; col = C_WARN
+            act = "Contact ASPSUS for procedure to remove orphan partitions."
+        } else if ($0 ~ /leaderless/) {
+            sev = "[WARNING ]"; col = C_WARN
+            act = "Research — leaderless partitions may cause availability issues."
+        } else {
+            sev = "[WARNING ]"; col = C_WARN; act = "Research."
+        }
+        if (use_color == 1) {
+            printf "  %s%s%s %s\n", col, sev, C_RESET, $0
+            if (act != "") printf "  %s[ACTION  ]%s %s\n", C_ACTION, C_RESET, act
+        } else {
+            printf "  %s %s\n", sev, $0
+            if (act != "") printf "  [ACTION  ] %s\n", act
+        }
+        next
+    }
+
+    # "No partitions found..." — stop capturing, print OK to screen
+    if ($0 ~ /^No partitions found/) {
+        in_found = 0
+        if (use_color == 1) {
+            printf "  %s[ OK     ]%s %s\n", C_GOOD, C_RESET, $0
+        } else {
+            printf "  [ OK     ] %s\n", $0
+        }
+        next
+    }
+
+    if (in_found) {
+        print $0 >> bad_log
+    } else {
+        if ($0 ~ /^[[:space:]]*$/) next
+        print "  " $0
+    }
 }
 
 END {
