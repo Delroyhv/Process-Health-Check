@@ -54,6 +54,20 @@ Each check script focuses on one diagnostic area. They are invoked by `runchk.sh
 
 `services_sh_25/` and `services_sh_26/` contain HCP software version-specific service scripts (v2.5 and v2.6). Scripts in these directories are sourced based on `_cs_version` from `healthcheck.conf`.
 
+### Test Scripts (dev-only, excluded from release bundle)
+
+| Script | Role |
+|--------|------|
+| `test_healthcheck.sh` | End-to-end test: rsync deploy → run `gsc_healthcheck.sh` against each `/ci/<SR>` directory |
+| `test_battery.sh` | Full sequence battery test: deploy → global prometheus cleanup → expand bundle → prometheus → runchk (twice: plain + `--report`) |
+
+Both scripts:
+- Accept optional SR filter args: `sudo bash test_battery.sh 05448336 05455380`
+- Set `TMPDIR=/var/ci/tmp` and pass it through `sudo`
+- Clean stale `2025*/2026*` run dirs before each SR
+- Cycle customer names: `HV ACME THOR ODEN LOKI`
+- Write main log to `/ci/test_<name>_YYYYMMDD_HHMMSS.log` and per-SR log to `/ci/<SR>/run_battery_*.log`
+
 ### Go Components
 
 - **`partition_growth/main.go`** — Analyzes partition growth trends from JSON event data. Pre-compiled binaries in `partition_growth/build/` for linux/darwin × amd64/arm64. No Go files exist at the repo root.
@@ -107,10 +121,21 @@ Detail lines following a `Found N partitions...` line are redirected to `bad_par
 
 ### Partition Growth Output Files
 
-- `partition_growth_chart.log` — text-based growth rates from the `partition_growth` binary (`-a` flag); always generated when binary and JSON are present
+- `partition_growth_chart.log` — text-based growth rates from the `partition_growth` binary (`-a` flag); always generated when binary and `partitionSplit.json` are present; includes `avg_monthly_growth: N splits/month`
 - `partition_growth_plot.log` — ASCII plots from gnuplot when `gnuplot` is detected; contains tool requirements message when gnuplot is absent
 
+**Sequencing rule:** `partition_growth` binary must run **before** `get_partition_details.sh` in `runchk.sh` so that `avg_monthly_growth` is available for the Cluster Expansion Sizing section. The binary no longer requires `_max_partitions > 1500`; it runs whenever `partitionSplit.json` exists.
+
 When adding plot/chart output, always check for the required tool first. If missing, write a requirements message to the plot log file rather than silently skipping.
+
+### avg_monthly_growth Calculation (`partition_growth/main.go`)
+
+The `-a` flag outputs a `--- 6-Month Average Monthly Growth ---` section:
+- Takes the most recent 6 calendar months with data
+- Detects trend by comparing first-half vs second-half per-month averages (cross-multiplied to avoid float division)
+- **Increasing or flat** → round **up** (ceiling integer division)
+- **Decreasing** → round **down** (floor integer division)
+- Final line: `avg_monthly_growth: N splits/month` — parsed by `get_partition_details.sh`
 
 ## Prometheus / chk_metrics.sh Rules
 
@@ -119,11 +144,35 @@ When adding plot/chart output, always check for the required tool first. If miss
 - This prevents flooding `health_report_metrics.log` with one `INTERNAL-ERROR: FAILED QUERY` line per metric (23+ lines)
 - Empty curl reply (`REPLY:`) always means Prometheus is unreachable, not a query logic error
 
+### runchk.sh Prometheus skip logic
+
+`runchk.sh` emits `[WARN] # SKIP chk_metrics.sh: Prometheus host not found in healthcheck.conf` in **all three** no-metrics cases:
+1. `--no-metrics` flag passed (e.g. no psnap, no conf — set by `gsc_healthcheck.sh`)
+2. `healthcheck.conf` exists but `_prom_server` is not configured
+3. `_prom_server` is configured but Prometheus is not reachable (5-second `curl /-/ready` probe, tries both configured protocol and http fallback)
+
+**Never** run `chk_metrics.sh` without a successful reachability probe first.
+
 ## Release Process
 
-1. Update `VERSION` file to next version (e.g. `v1.2.58`)
+1. Update `VERSION` file to next version (e.g. `v1.2.59`)
 2. Update `CHANGELOG.md` with entry and SHA256
-3. Run `make bundle` — builds binaries, updates README version, creates `process_health_vX.Y.Z.tar.xz`
-4. Commit changed files (`VERSION`, `CHANGELOG.md`, `README.md`, changed scripts)
+3. Run `make bundle` — builds Go binaries, updates README version, creates `process_health_vX.Y.Z.tar.xz`
+   - Bundle **excludes**: `test_*.sh`, `test_*.go`, `mock_curl.sh`, `CLAUDE.md`, `.git/`, `*.tar.xz`, `*.sha256`, `*.log`
+4. Commit changed files (`VERSION`, `CHANGELOG.md`, `README.md`, changed scripts, rebuilt binaries)
 5. Tag: `git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z`
 6. Create GitHub release: `gh release create vX.Y.Z process_health_vX.Y.Z.tar.xz --title "vX.Y.Z" --notes "..."`
+7. After release, merge `main` → `dev`: `git checkout dev && git merge main && git push`
+
+## Temp Directory / mktemp Rules
+
+- Always use `mktemp -d` (not `mktemp`) when creating temp dirs in scripts, then register the **subdirectory** with `gsc_add_tmp_dir`
+- **Never** register `$(dirname "$(mktemp)")` — that registers the parent `TMPDIR` itself, which `gsc_cleanup` will delete and break subsequent runs
+- CI sets `TMPDIR=/var/ci/tmp` and passes it through `sudo` via `sudo TMPDIR=... cmd`
+- `gsc_healthcheck.sh` uses `_tmp_dir=$(mktemp -d); gsc_add_tmp_dir "${_tmp_dir}"` — cleanup removes only the subdir
+
+## gsc_healthcheck_report.sh Rules
+
+- `_count_severity()` uses `grep -c` which always outputs a count (including `0`) and exits 1 on no match
+- **Never** add `|| echo 0` after `grep -c` — it produces `0\n0` causing arithmetic errors; use `|| true` instead
+- HTML-escape text **before** adding colour spans in `_colorize_pre()` to prevent entity re-escaping
