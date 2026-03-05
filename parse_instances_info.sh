@@ -93,12 +93,16 @@ if [[ "${_input_file}" != "" ]]; then
     fi
 else
     if [[ "${_dir_name}" != "" ]]; then
-        if [[ -d "${_dir_name}" ]]; then
-            _input_json_file=$(gsc_find_file "${_dir_name}" "${_input_file_shortname}")
-        else
+        if [[ ! -d "${_dir_name}" ]]; then
             echo "ERROR: CANNOT FIND ${_dir_name} directory."
             exit 1
         fi
+        # Try the requested shortname first, then fall back to known bundle filenames
+        _candidates=("${_input_file_shortname}" "foundry_instances.json" "instances.json")
+        for _candidate in "${_candidates[@]}"; do
+            _input_json_file=$(gsc_find_file "${_dir_name}" "${_candidate}")
+            [[ -n "${_input_json_file}" ]] && break
+        done
     else
         echo "ERROR: MISSING INPUT PARAMETERS: specify either -f or -d options."
         exit 1
@@ -107,7 +111,7 @@ fi
 
 # Check if the input file exists
 if [[ "${_input_json_file}" == "" ]]; then
-    echo "ERROR: CANNOT FIND ${_input_file_shortname} file in ${_dir_name} directory."
+    echo "ERROR: CANNOT FIND ${_input_file_shortname} (or foundry_instances.json / instances.json) in ${_dir_name} directory."
     exit 1
 fi
 
