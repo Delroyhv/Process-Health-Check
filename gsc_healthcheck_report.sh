@@ -152,7 +152,9 @@ _collect_issues() {
 }
 
 _count_severity() {
-    printf '%s\n' "${1}" | grep -cE "${2}" 2>/dev/null || echo 0
+    # grep -c always outputs the count (including 0) and exits 1 on no match.
+    # Do NOT add || echo 0 — that would produce "0\n0" and break arithmetic.
+    printf '%s\n' "${1}" | grep -cE "${2}" 2>/dev/null || true
 }
 
 # HTML-escape then add colour spans. Always use for <pre> blocks.
@@ -299,6 +301,12 @@ _build_md() {
         printf '</pre>\n\n'
     fi
 
+    if [[ -f "partition_growth_plot.log" ]]; then
+        printf '### Growth Plots\n\n<pre>\n'
+        _colorize_pre < "partition_growth_plot.log"
+        printf '</pre>\n\n'
+    fi
+
     local _part="health_report_partition_details.log"
     if [[ -f "${_part}" ]]; then
         printf '### Density Details\n\n<pre>\n'
@@ -394,6 +402,12 @@ _build_html() {
     if [[ -f "partition_growth_chart.log" ]]; then
         printf '<h3>Growth Trends</h3>\n<pre>\n'
         _colorize_pre < "partition_growth_chart.log"
+        printf '</pre>\n'
+    fi
+
+    if [[ -f "partition_growth_plot.log" ]]; then
+        printf '<h3>Growth Plots</h3>\n<pre>\n'
+        _colorize_pre < "partition_growth_plot.log"
         printf '</pre>\n'
     fi
 

@@ -300,6 +300,70 @@ func main() {
         }
         fmt.Println()
 
+        // --- 6-Month Average Monthly Growth ---
+        fmt.Println("--- 6-Month Average Monthly Growth ---")
+        allMonthKeys := make([]string, 0, len(perMonth))
+        for mk := range perMonth {
+            allMonthKeys = append(allMonthKeys, mk)
+        }
+        sort.Sort(sort.Reverse(sort.StringSlice(allMonthKeys)))
+
+        n6 := 6
+        if len(allMonthKeys) < n6 {
+            n6 = len(allMonthKeys)
+        }
+        recent6 := make([]string, n6)
+        copy(recent6, allMonthKeys[:n6])
+        sort.Strings(recent6) // ascending: oldest → newest
+
+        counts6 := make([]int, n6)
+        total6 := 0
+        for i, mk := range recent6 {
+            counts6[i] = perMonth[mk]
+            total6 += perMonth[mk]
+        }
+
+        // Trend: compare per-month average of first half vs second half
+        mid := n6 / 2
+        if mid == 0 {
+            mid = 1
+        }
+        firstSum, secondSum := 0, 0
+        for i := 0; i < mid; i++ {
+            firstSum += counts6[i]
+        }
+        for i := mid; i < n6; i++ {
+            secondSum += counts6[i]
+        }
+        secondHalfLen := n6 - mid
+
+        // Cross-multiply to compare averages without float division:
+        //   increasing if secondSum/secondHalfLen >= firstSum/mid
+        //   i.e., secondSum*mid >= firstSum*secondHalfLen
+        increasing := secondSum*mid >= firstSum*secondHalfLen
+
+        var avgMonthlyGrowth int
+        if n6 > 0 {
+            if increasing {
+                // Increasing or flat: round up
+                avgMonthlyGrowth = (total6 + n6 - 1) / n6
+            } else {
+                // Decreasing: round down
+                avgMonthlyGrowth = total6 / n6
+            }
+        }
+
+        for i, mk := range recent6 {
+            fmt.Printf("  %s: %d splits\n", mk, counts6[i])
+        }
+        trend := "increasing"
+        if !increasing {
+            trend = "decreasing"
+        }
+        fmt.Printf("Trend (last %d months): %s\n", n6, trend)
+        fmt.Printf("avg_monthly_growth: %d splits/month\n", avgMonthlyGrowth)
+        fmt.Println()
+
         fmt.Println("--- Last 30 Days Partition Growth ---")
         if len(allDates) > 0 {
             sort.Slice(allDates, func(i, j int) bool { return allDates[i].After(allDates[j]) })

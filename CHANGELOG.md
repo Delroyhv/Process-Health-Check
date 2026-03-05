@@ -1,3 +1,13 @@
+## v1.2.59
+- partition_growth: Add 6-month average monthly growth trend (`avg_monthly_growth`). Trend direction (increasing/decreasing) is detected using cross-multiplication comparison of the first and second halves of the 6-month window; increasing trend rounds up (ceiling), decreasing rounds down (floor).
+- runchk.sh: Run `partition_growth` binary before `get_partition_details.sh` so the `avg_monthly_growth` rate is available for the "Projected Monthly Growth" line in partition detail output.
+- runchk.sh: Add Prometheus reachability probe (`curl -sf --max-time 5 .../​-/ready`) before running `chk_metrics.sh`. If Prometheus is unreachable, emit `[WARN] # SKIP chk_metrics.sh` and skip gracefully instead of flooding output with per-metric errors. `--no-metrics` path also emits a `[WARN]` skip message.
+- gsc_healthcheck.sh: Fix `mktemp` failure on systems where `/tmp` is not writable. Changed from `mktemp` (file in TMPDIR) to `mktemp -d` (unique subdir); register only the subdir with `gsc_add_tmp_dir`, not the parent TMPDIR, preventing subsequent SR runs from failing when cleanup wipes the base temp directory.
+- gsc_healthcheck_report.sh: Fix `_count_severity` arithmetic error — `grep -c` exits 1 on no match; using `|| echo 0` produced `"0\n0"` which broke `$(( ... ))`. Changed to `|| true`.
+- test_battery.sh: New full-sequence battery integration test — deploys repo, runs global Prometheus cleanup, then for each SR: expand → find run dir → find psnap → start Prometheus → runchk → runchk --report. Supports optional SR filter arguments. Logs per-SR and per-run.
+- Makefile: Exclude `test_*.sh`, `test_*.go`, `mock_curl.sh`, and `CLAUDE.md` from the release bundle.
+- docs: Standardise all examples to customer `ACME`, SR `17762026`.
+
 ## v1.2.58
 - chk_metrics.sh: add Prometheus connectivity re-probe after protocol auto-switch; if Prometheus is unreachable after both https and http attempts, log a single clear ERROR and exit cleanly instead of flooding the log with one INTERNAL-ERROR: FAILED QUERY line per metric (23+ lines in typical deployments).
 

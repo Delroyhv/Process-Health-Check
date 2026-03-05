@@ -156,11 +156,11 @@ automatic HCP CS version detection.
 
 ## Expand a full support bundle
 
-    expand_hcpcs_support.sh -r /ci/05304447
+    expand_hcpcs_support.sh -r /ci/17762026
 
 ## Expand but skip healthcheck generation
 
-    expand_hcpcs_support.sh -r /ci/05304447 --no-healthcheck
+    expand_hcpcs_support.sh -r /ci/17762026 --no-healthcheck
 
 ## Generate a fresh healthcheck.conf for a specific psnap
 
