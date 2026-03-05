@@ -1,3 +1,11 @@
+## v1.2.58
+- chk_metrics.sh: add Prometheus connectivity re-probe after protocol auto-switch; if Prometheus is unreachable after both https and http attempts, log a single clear ERROR and exit cleanly instead of flooding the log with one INTERNAL-ERROR: FAILED QUERY line per metric (23+ lines in typical deployments).
+
+### SHA256
+```
+84fe4ffafddad98250609a3771c55a50cde3aa369bdd2303746ae9658baaa4c4  process_health_v1.2.58.tar.xz
+```
+
 ## v1.2.01
 - **Optimization:** Implemented randomized port selection (9090-9599) to minimize lock contention.
 - **Concurrency:** Integrated `flock` for atomic port allocation and container startup.

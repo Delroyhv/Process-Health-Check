@@ -681,6 +681,13 @@ elif [[ "${_forced_proto}" == "false" && ("$(gsc_is_empty "${_oldest_date}")" ==
         _prom_proto="${_non_default_proto}"
         gsc_log_info "Auto-switching protocol to ${_prom_proto} - collecting from ${_prom_proto}://${_prom_name}:${_prom_port}"
     fi
+    # Re-probe with new protocol; abort cleanly if still unreachable
+    _oldest_date=$(getOldestMetricTimestamp)
+    if [[ "$(gsc_is_empty "${_oldest_date}")" == "true" || "${_oldest_date}" == "null" ]]; then
+        gsc_loga "ERROR: Prometheus at ${_prom_proto}://${_prom_name}:${_prom_port} is not reachable - skipping all metric queries"
+        gsc_log_error "Prometheus at ${_prom_proto}://${_prom_name}:${_prom_port} is not reachable - skipping all metric queries"
+        exit 0
+    fi
 else
     gsc_log_info "Oldest metric timestamp: $(gsc_get_date_format "${_oldest_date}")"
 fi
