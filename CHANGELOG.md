@@ -8,6 +8,11 @@
 - Makefile: Exclude `test_*.sh`, `test_*.go`, `mock_curl.sh`, and `CLAUDE.md` from the release bundle.
 - docs: Standardise all examples to customer `ACME`, SR `17762026`.
 
+### SHA256
+```
+11467a79f1296779464423e699a2633b8e3b577be46fab5267a21891ec7e0f74  process_health_v1.2.59.tar.xz
+```
+
 ## v1.2.58
 - chk_metrics.sh: add Prometheus connectivity re-probe after protocol auto-switch; if Prometheus is unreachable after both https and http attempts, log a single clear ERROR and exit cleanly instead of flooding the log with one INTERNAL-ERROR: FAILED QUERY line per metric (23+ lines in typical deployments).
 
