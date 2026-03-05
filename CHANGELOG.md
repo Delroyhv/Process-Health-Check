@@ -1,3 +1,11 @@
+## v1.2.60
+- parse_instances_info.sh: Fix missing `hcpcs_services_info.log` on modern bundles. Added fallback candidate search: `config_foundry_instances.out` → `foundry_instances.json` → `instances.json`. Resolves `[WARN] Cannot find 'hcpcs_services_info.log'` in `chk_service_placement.sh`, `prep_services_instances.sh`, and `chk_services_memory.sh`.
+
+### SHA256
+```
+16f1b35d7b50e827388a47f77fced301b5bd7b2a2da5aa66c48f48cb3486dcb6  process_health_v1.2.60.tar.xz
+```
+
 ## v1.2.59
 - partition_growth: Add 6-month average monthly growth trend (`avg_monthly_growth`). Trend direction (increasing/decreasing) is detected using cross-multiplication comparison of the first and second halves of the 6-month window; increasing trend rounds up (ceiling), decreasing rounds down (floor).
 - runchk.sh: Run `partition_growth` binary before `get_partition_details.sh` so the `avg_monthly_growth` rate is available for the "Projected Monthly Growth" line in partition detail output.

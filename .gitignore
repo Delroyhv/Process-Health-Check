@@ -22,6 +22,9 @@ partition_growth/*.test
 tmp/
 temp/
 
+# Stale release archive directory
+archive/
+
 # Distribution/Staging
 release/
 processhealth/
