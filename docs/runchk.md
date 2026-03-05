@@ -5,7 +5,7 @@ runchk.sh - run the HCP Cloud Scale health check suite
 # SYNOPSIS
 
 **runchk.sh** \[**-f** *healthcheck.conf*\] \[**--full-detail**\]
-\[**--no-metrics**\]
+\[**--no-metrics**\] \[**--report** *FILE*\]
 
 # DESCRIPTION
 
@@ -50,10 +50,18 @@ df filesystem usage, lsblk block device layout, LVM PV/VG health.
 **chk_messages.sh**  
 journald error/warning analysis (last 30 days, deduplicated per day).
 
-**--no-metrics**  
+**--no-metrics**
 Skip **chk_metrics.sh**. Use when no Prometheus container is available.
+When the Prometheus server is configured but unreachable, **runchk.sh**
+will automatically skip metrics with a `[WARN]` message even without this
+flag.
 
-**-h**, **--help**  
+**--report** *FILE*
+After all checks complete, generate a Markdown summary report at *FILE*
+using **gsc_healthcheck_report.sh**. Append *.pdf* extension to request
+PDF output (requires **wkhtmltopdf**, **weasyprint**, or **pandoc**).
+
+**-h**, **--help**
 Print a usage summary and exit.
 
 # HEALTHCHECK.CONF KEYS
@@ -103,7 +111,14 @@ Builds the partition event JSON consumed by later checks.
 **get_partition_tool_info.sh**  
 Extracts information about the partition management tool version.
 
-**chk_partInfo.sh -d .**  
+**partition_growth** *(automatic)*
+Calculates yearly partition growth summaries and a 6-month average
+monthly growth rate from *partitionSplit.json*. Runs before
+**get_partition_details.sh** so the projected monthly growth rate is
+available in the partition detail output. Results are written to
+*partition_growth_chart.log* and *partition_growth_plot.log*.
+
+**chk_partInfo.sh -d .**
 Analyses partition events and growth trends.
 
 **parse_instances_info.sh**  
@@ -220,15 +235,19 @@ Integrity manifest verified by **selfcheck.sh**.
 
 ## Full five-step workflow
 
-    expand_hcpcs_support.sh -r /ci/05304447
-    cd /ci/05304447/2025-11-26_20-48-48
+    expand_hcpcs_support.sh -r /ci/17762026
+    cd /ci/17762026/2025-11-26_20-48-48
     sudo gsc_prometheus.sh \
-        -s 05304447 -c AcmeCorp \
+        -s 17762026 -c ACME \
         -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances
-    # [ OK  ] Prometheus for AcmeCorp/05304447 started on port 9092.
+    # [ OK  ] Prometheus for ACME/17762026 started on port 9092.
     expand_hcpcs_support.sh --healthcheck-only -u -p 9092
-    runchk.sh -f ./healthcheck.conf --full-detail
+    runchk.sh -f ./healthcheck.conf --full-detail --report ACME_report.md
+
+## Generate a report only (checks already run)
+
+    runchk.sh -f ./healthcheck.conf --report ACME_report.md
 
 # SEE ALSO
 
