@@ -1,3 +1,14 @@
+## v1.2.67
+- hcpcs_db: New Go binary (`hcpcs_db/`) backed by SQLite (`modernc.org/sqlite`, pure Go / CGO-free). Stores health check run results for trending and audit. Commands: `record` (scan `health_report*.log`, apply `_issues_filter` noise exclusions, insert run + issues in one transaction); `list` (aligned table with SR, customer, version, node count, elapsed, severity counts); `show <id>` (issues grouped by severity with headers); `trend <sr>` (per-run severity counts with ↑/↓/→ trend arrows). Auto-called by `runchk.sh` after each run when `HCPCS_DB` env var is set.
+- runchk.sh: After computing `_elapsed`, dispatch `hcpcs_db record --elapsed N [--customer NAME]` when `HCPCS_DB` is set. Customer name sourced from `HCPCS_CUSTOMER` env var (set by `gsc_healthcheck.sh`).
+- gsc_healthcheck.sh: Pass `HCPCS_CUSTOMER="${_customer}"` when invoking `runchk.sh` so the DB record captures the customer name from `-c` flag.
+- hcpcs_db compiled for linux/darwin × amd64/arm64. Default DB path: `~/.local/share/hcpcs/results.db`.
+
+### SHA256
+```
+c76add0214d3bc12a43e7fe97f9ad1a7c85e2258617511f1da0036f883231287  process_health_v1.2.67.tar.xz
+```
+
 ## v1.2.66
 - hcpcs_alertengine: New Go binary (`hcpcs_alertengine/`) that replaces the curl+jq pipeline in `chk_metrics.sh`. Issues all Prometheus range/instant queries in parallel (goroutines), eliminating the sequential-per-query bottleneck. Handles protocol auto-switch (https→http), unreachable Prometheus (clean exit 0), per-alert step overrides, consecutive probe logic, label fan-out, Exclude filter, Ignore criteria, TELEMETRY mode (min/max/avg), and %PROBESTEP/%THRESHOLD substitution. Output format matches `chk_metrics.sh` exactly so runchk.sh summary grep works. Falls back to curl+jq if binary absent.
 - chk_metrics.sh: Add Go binary dispatch block after `gsc_rotate_log`; passes `--host`, `--port`, `--proto`, `--output`, `--json`, `--probes`, `--interval`, `--date`, `--threshold`, `--no-range` as appropriate from shell parameters.

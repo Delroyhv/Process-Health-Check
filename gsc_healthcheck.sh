@@ -144,7 +144,7 @@ _run_dir_checks() {
   [[ -f "healthcheck.conf" ]] && _chk_args+=("-f" "healthcheck.conf")
   [[ "${_no_metrics}" -eq 1 ]] && _chk_args+=("--no-metrics")
 
-  "${_script_dir}/runchk.sh" "${_chk_args[@]}"
+  HCPCS_CUSTOMER="${_customer}" "${_script_dir}/runchk.sh" "${_chk_args[@]}"
 }
 
 main() {

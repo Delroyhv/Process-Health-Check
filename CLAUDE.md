@@ -22,6 +22,8 @@ cd cluster_forecast   && make all
 cd parse_instances    && make all
 cd chk_snodes         && make all
 cd chk_alerts         && make all
+cd hcpcs_alertengine  && make all
+cd hcpcs_db           && make all
 ```
 
 ## Architecture
@@ -84,6 +86,7 @@ All Go binaries follow the same pattern: `<name>/main.go` + `<name>/Makefile`, c
 | `chk_snodes` | `chk_snodes/` | grep-on-JSON counting | `chk_snodes.sh` |
 | `chk_alerts` | `chk_alerts/` | `.events[].time` bug + jq | `chk_alerts.sh` |
 | `hcpcs_alertengine` | `hcpcs_alertengine/` | Sequential curl+jq (50+ queries) | `chk_metrics.sh` |
+| `hcpcs_db` | `hcpcs_db/` | — (new: results DB) | `runchk.sh` (when `HCPCS_DB` set) |
 
 **`partition_growth/main.go`** — Analyzes partition growth trends from JSON event data. `-a` flag outputs chart + `avg_monthly_growth: N splits/month` line.
 
@@ -98,6 +101,22 @@ All Go binaries follow the same pattern: `<name>/main.go` + `<name>/Makefile`, c
 **Dispatch placement rule for chk_alerts.sh:** Binary dispatch runs **before** the `find | grep -m 1 | head -n 1` file-discovery pipelines. Those pipelines produce SIGPIPE exit 141 under `set -euo pipefail` (from `gsc_core.sh`), killing the script before reaching a later dispatch block. The binary does its own discovery via `--dir`.
 
 **`hcpcs_alertengine/main.go`** — Replaces the sequential curl+jq query loop in `chk_metrics.sh`. Issues all Prometheus range/instant queries in parallel (goroutines). Handles: protocol auto-switch (https→http), unreachable Prometheus (clean exit 0, single ERROR line), per-alert `Step` override, `ConsecutiveProbes` logic, label fan-out, `Exclude` filter, `Ignore` criteria, TELEMETRY mode (min/max/avg over all probes), `%PROBESTEP`/`%THRESHOLD` substitution. Output format mirrors `chk_metrics.sh` exactly (matches summary `grep -hE "ERROR|WARNING"`). CLI: `--host`, `--port`, `--proto`, `--json`, `--output`, `--probes`, `--interval`, `--date`, `--threshold`, `--no-range`.
+
+**`hcpcs_db/main.go`** — SQLite-backed results database (pure Go via `modernc.org/sqlite`, CGO-free). Stores per-run severity counts and all filtered issues. Auto-invoked by `runchk.sh` when `HCPCS_DB` env var is set.
+
+Schema: `runs` (id, ts, run_dir, sr_number, customer, cs_version, node_count, elapsed_sec, *_count, issues_total) + `issues` (run_id, severity, source, message).
+
+Commands:
+- `record [--elapsed N] [--customer NAME] [--sr SR] [--dir DIR]` — Scan `health_report*.log` in cwd (or `--dir`), apply `_issues_filter` noise patterns, insert run + issues in one transaction.
+- `list [--limit N] [--sr SR]` — Aligned table: ID, Timestamp, SR, Customer, Version, Nodes, Elapsed, CRIT/DANG/ERR/WARN/ACT.
+- `show <id>` — Group issues by severity with `── SEVERITY ──` headers.
+- `trend <sr>` — Per-run row for one SR with ↑/↓/→ trend arrows vs previous run.
+
+Integration:
+- `runchk.sh`: after `_elapsed` is computed, if `HCPCS_DB` is set → dispatch binary with `record --elapsed ${_elapsed}` (+ `--customer` from `HCPCS_CUSTOMER` env var).
+- `gsc_healthcheck.sh`: passes `HCPCS_CUSTOMER="${_customer}"` when calling `runchk.sh`.
+
+Default DB path: `~/.local/share/hcpcs/results.db` (overridden by `HCPCS_DB` env var).
 
 ### Long-term Go Conversion Plan
 

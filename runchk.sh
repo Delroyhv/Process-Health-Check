@@ -245,6 +245,20 @@ _issues_filter='^health_report_messages\.log:|: source [^ ]+ (unreachable|degrad
 _all_issues=$(grep -hE "ERROR|WARNING|CRITICAL|DANGER|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" || true)
 _issues_count=$(printf '%s\n' "${_all_issues}" | grep -c . 2>/dev/null || echo 0)
 
+# ── hcpcs_db: record run if HCPCS_DB is set ──────────────────────────────────
+if [[ -n "${HCPCS_DB:-}" ]]; then
+    _db_os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    _db_arch=$(uname -m)
+    [[ "${_db_arch}" == "x86_64" ]]  && _db_arch="amd64"
+    [[ "${_db_arch}" == "aarch64" ]] && _db_arch="arm64"
+    _db_bin="${_script_dir}/hcpcs_db/build/hcpcs_db-${_db_os}-${_db_arch}"
+    if [[ -x "${_db_bin}" ]]; then
+        _db_args=(record --elapsed "${_elapsed}")
+        [[ -n "${HCPCS_CUSTOMER:-}" ]] && _db_args+=(--customer "${HCPCS_CUSTOMER}")
+        "${_db_bin}" "${_db_args[@]}" || true
+    fi
+fi
+
 gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
 gsc_log_info "SUMMARY: ${_issues_count} issue(s) found | Elapsed: ${_elapsed}s"
 gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
