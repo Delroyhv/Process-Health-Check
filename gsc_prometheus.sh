@@ -253,8 +253,8 @@ _start_prometheus_container() {
     "${_extra[@]}" \
     --name "${_name}" \
     -p "${_port}:9090" \
-    -v "${_data_dir}:/prometheus" \
-    -v "${_prom_dir}/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+    -v "${_data_dir}:/prometheus:z" \
+    -v "${_prom_dir}/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z" \
     "${_image}"
 }
 
