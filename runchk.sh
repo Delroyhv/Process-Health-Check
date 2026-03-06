@@ -21,10 +21,11 @@ _full_detail=0
 _no_metrics=0
 _report_file=""
 _chart_sections=""
+_forecast_thresh_new=""
 
 # ── Usage ────────────────────────────────────────────────────────────────────
 usage() {
-    echo "Usage: runchk.sh [-f healthcheck.conf] [--full-detail] [--no-metrics] [--report report.md] [--chart yearly,quarterly,monthly] [-h]"
+    echo "Usage: runchk.sh [-f healthcheck.conf] [--full-detail] [--no-metrics] [--report report.md] [--chart yearly,quarterly,monthly] [--forecast N] [-h]"
 }
 
 # ── Option parsing ───────────────────────────────────────────────────────────
@@ -51,6 +52,13 @@ while [[ $# -gt 0 ]]; do
                 _chart_sections="$2"; shift 2
             else
                 gsc_log_error "--chart requires a value (e.g. quarterly,yearly,monthly)"; exit 1
+            fi
+            ;;
+        --forecast)
+            if [[ -n "${2-}" ]]; then
+                _forecast_thresh_new="$2"; shift 2
+            else
+                gsc_log_error "--forecast requires a threshold value in GB (e.g. --forecast 16)"; exit 1
             fi
             ;;
         -h|--help) usage; exit 0 ;;
@@ -225,6 +233,7 @@ fi
 if [[ -n "${_report_file}" ]]; then
     _report_args=(-o "${_report_file}" -d .)
     [[ -n "${_chart_sections}" ]] && _report_args+=(--chart "${_chart_sections}")
+    [[ -n "${_forecast_thresh_new}" ]] && _report_args+=(--forecast "${_forecast_thresh_new}")
     "${_script_dir}/gsc_healthcheck_report.sh" "${_report_args[@]}"
 fi
 

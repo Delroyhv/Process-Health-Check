@@ -1,3 +1,14 @@
+## v1.2.64
+- cluster_forecast: New Go binary (`cluster_forecast/`) that reads partition counts, MDGW instance count, and avg_monthly_growth from health check logs and produces a 12-month MDGW node sizing forecast. Supports Ideal (≤500 copies/node) and Cautious (≤900 copies/node) targets. Optional `--threshold-new N` models the effect of increasing the partition size threshold (e.g. 1 GB → 16 GB reduces growth rate by 16x). `--mdgw N` overrides the MDGW count when logs report N/A. Compiled for linux/darwin × amd64/arm64.
+- cluster_forecast: Handles `MDGW instances: N/A` gracefully — defaults to 1 with a warning, or accepts `--mdgw N` override.
+- gsc_healthcheck_report.sh: Add `--forecast N` option to embed the cluster growth forecast after the Density Details section in both Markdown and HTML/PDF reports. N is the proposed new partition size threshold in GB.
+- runchk.sh: Add `--forecast N` option; parses and forwards the value to `gsc_healthcheck_report.sh` when `--report` is also set.
+
+### SHA256
+```
+137d0d61def3753b5730d88645346c9e713dcc223b1343d45d4de267045126d2  process_health_v1.2.64.tar.xz
+```
+
 ## v1.2.63
 - gsc_healthcheck.sh: Fix auto-discovery mode (no -f) — resolve SR base directory before calling expand_hcpcs_support.sh and pass it via -r so bundles are found under the SR directory rather than the current working directory. This enables the multi-support-log path: without -f, all supportLogs_*.tar.xz under the SR dir are expanded and each resulting YYYY-MM-DD_HH-MM-SS directory is processed with a unique customer name suffix.
 

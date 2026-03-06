@@ -15,16 +15,19 @@ _log_dir="."
 _out_file="health_report.md"
 _format="md"
 _chart_sections=""
+_forecast_thresh_new=""
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") [-d dir] [-o outfile] [-f md|pdf] [--chart sections] [-h]
+Usage: $(basename "$0") [-d dir] [-o outfile] [-f md|pdf] [--chart sections] [--forecast N] [-h]
 
   -d <dir>         Directory with health_report_*.log and lshw.log (default: .)
   -o <outfile>     Output file (default: health_report.md)
   -f md|pdf        Output format; auto-detected from -o extension if omitted
   --chart <secs>   Comma-separated chart sections to include in report
                    (yearly, quarterly, monthly; e.g. quarterly,yearly)
+  --forecast N     Embed cluster growth forecast; N = proposed threshold in GB
+                   (e.g. --forecast 16 to model a 1 GB -> 16 GB threshold increase)
   -h               Show this help
 EOF
 }
@@ -35,6 +38,7 @@ while [[ $# -gt 0 ]]; do
         -o) _out_file="$2";       shift 2 ;;
         -f) _format="$2";         shift 2 ;;
         --chart) _chart_sections="$2"; shift 2 ;;
+        --forecast) _forecast_thresh_new="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) usage; exit 1 ;;
     esac
@@ -177,6 +181,22 @@ _colorize_pre() {
 _extract_chart_section() {
     local _header="$1" _file="$2"
     awk -v h="${_header}" 'found && /^--- / {exit} $0==h{found=1} found' "${_file}"
+}
+
+# Run cluster_forecast binary and return its output; empty if binary/data not available.
+_run_forecast() {
+    local _thresh_new="$1"
+    local _os _arch _bin
+    _os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    _arch=$(uname -m)
+    [[ "${_arch}" == "x86_64" ]] && _arch="amd64"
+    [[ "${_arch}" == "aarch64" ]] && _arch="arm64"
+    _bin="${_script_dir}/cluster_forecast/build/cluster_forecast-${_os}-${_arch}"
+    [[ -x "${_bin}" ]] || return 0
+    [[ -f "partition_splits.log" ]] || return 0
+    local _args=(--dir .)
+    [[ -n "${_thresh_new}" ]] && _args+=(--threshold-new "${_thresh_new}")
+    "${_bin}" "${_args[@]}" 2>/dev/null || true
 }
 
 # ── HTML page wrapper ─────────────────────────────────────────────────────────
@@ -339,6 +359,16 @@ _build_md() {
         } | _colorize_pre
         printf '</pre>\n'
     fi
+
+    if [[ -n "${_forecast_thresh_new}" ]]; then
+        local _fc_out
+        _fc_out=$(_run_forecast "${_forecast_thresh_new}")
+        if [[ -n "${_fc_out}" ]]; then
+            printf '\n### Cluster Growth Forecast\n\n<pre>\n'
+            printf '%s\n' "${_fc_out}" | _colorize_pre
+            printf '</pre>\n'
+        fi
+    fi
 }
 
 # ── Report body: HTML (for PDF) ───────────────────────────────────────────────
@@ -453,6 +483,16 @@ _build_html() {
                 || echo "None"
         } | _colorize_pre
         printf '</pre>\n'
+    fi
+
+    if [[ -n "${_forecast_thresh_new}" ]]; then
+        local _fc_out
+        _fc_out=$(_run_forecast "${_forecast_thresh_new}")
+        if [[ -n "${_fc_out}" ]]; then
+            printf '<h3>Cluster Growth Forecast</h3>\n<pre>\n'
+            printf '%s\n' "${_fc_out}" | _colorize_pre
+            printf '</pre>\n'
+        fi
     fi
 }
 
