@@ -297,17 +297,9 @@ END {
     if (use_color == 1) { label = C_ACTION label C_RESET }
 
     if (crit_count > 0) {
-        if (use_color == 1) {
-            printf "\n%s[CRITICAL]%s Partition count CRITICAL: %d node(s) with partition copies/node >= %d (max: %d)\n", C_CRIT, C_RESET, crit_count, t_c, max_count
-        } else {
-            printf "\n[CRITICAL] Partition count CRITICAL: %d node(s) with partition copies/node >= %d (max: %d)\n", crit_count, t_c, max_count
-        }
+        printf "\nCRITICAL: Partition count: %d node(s) with partition copies/node >= %d (max: %d)\n", crit_count, t_c, max_count
     } else if (danger_count > 0) {
-        if (use_color == 1) {
-            printf "\n%s[DANGER]%s Partition count DANGER: %d node(s) with partition copies/node >= %d (max: %d)\n", C_DANGER, C_RESET, danger_count, t_d, max_count
-        } else {
-            printf "\n[DANGER] Partition count DANGER: %d node(s) with partition copies/node >= %d (max: %d)\n", danger_count, t_d, max_count
-        }
+        printf "\nDANGER: Partition count: %d node(s) with partition copies/node >= %d (max: %d)\n", danger_count, t_d, max_count
     }
 
     if (max_count > 1500 && (st_val == "1G" || st_val == "1Gi")) {
