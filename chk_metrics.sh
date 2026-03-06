@@ -632,6 +632,28 @@ fi
 _output_file="${_logfile_name}"
 gsc_rotate_log "${_output_file}"
 
+# ── Go binary (parallel queries, no jq subprocesses) ─────────────────────────
+_hae_os=$(uname -s | tr '[:upper:]' '[:lower:]')
+_hae_arch=$(uname -m)
+[[ "${_hae_arch}" == "x86_64" ]]  && _hae_arch="amd64"
+[[ "${_hae_arch}" == "aarch64" ]] && _hae_arch="arm64"
+_hae_bin="${_script_dir}/hcpcs_alertengine/build/hcpcs_alertengine-${_hae_os}-${_hae_arch}"
+
+if [[ -x "${_hae_bin}" ]]; then
+    gsc_log_info "Using Go binary: hcpcs_alertengine"
+    _hae_args=(--host "${_prom_name}" --port "${_prom_port}" --proto "${_prom_proto}"
+               --output "${_output_file}" --json "${_metrics_json_file}"
+               --probes "${_probes_num}" --interval "${_probes_interval}")
+    [[ "${_probes_enabled}" == "false" ]] && _hae_args+=(--no-range)
+    [[ -n "${_pdate}" ]] && _hae_args+=(--date "${_pdate}")
+    [[ "${_threshold}" != "${_default_threshold}" ]] && _hae_args+=(--threshold "${_threshold}")
+    if "${_hae_bin}" "${_hae_args[@]}" 2>&1; then
+        gsc_log_info "Saved results ${_output_file}"
+        exit 0
+    fi
+    gsc_log_warn "Go binary failed — falling back to curl+jq"
+fi
+
 gsc_log_debug "Prometheus: ${_prom_proto}://${_prom_name}:${_prom_port}   Date: '${_pdate}'  Verbose: ${_verbose}"
 
 

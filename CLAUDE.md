@@ -83,6 +83,7 @@ All Go binaries follow the same pattern: `<name>/main.go` + `<name>/Makefile`, c
 | `parse_instances` | `parse_instances/` | N×M jq subprocess loop | `parse_instances_info.sh` |
 | `chk_snodes` | `chk_snodes/` | grep-on-JSON counting | `chk_snodes.sh` |
 | `chk_alerts` | `chk_alerts/` | `.events[].time` bug + jq | `chk_alerts.sh` |
+| `hcpcs_alertengine` | `hcpcs_alertengine/` | Sequential curl+jq (50+ queries) | `chk_metrics.sh` |
 
 **`partition_growth/main.go`** — Analyzes partition growth trends from JSON event data. `-a` flag outputs chart + `avg_monthly_growth: N splits/month` line.
 
@@ -96,14 +97,11 @@ All Go binaries follow the same pattern: `<name>/main.go` + `<name>/Makefile`, c
 
 **Dispatch placement rule for chk_alerts.sh:** Binary dispatch runs **before** the `find | grep -m 1 | head -n 1` file-discovery pipelines. Those pipelines produce SIGPIPE exit 141 under `set -euo pipefail` (from `gsc_core.sh`), killing the script before reaching a later dispatch block. The binary does its own discovery via `--dir`.
 
+**`hcpcs_alertengine/main.go`** — Replaces the sequential curl+jq query loop in `chk_metrics.sh`. Issues all Prometheus range/instant queries in parallel (goroutines). Handles: protocol auto-switch (https→http), unreachable Prometheus (clean exit 0, single ERROR line), per-alert `Step` override, `ConsecutiveProbes` logic, label fan-out, `Exclude` filter, `Ignore` criteria, TELEMETRY mode (min/max/avg over all probes), `%PROBESTEP`/`%THRESHOLD` substitution. Output format mirrors `chk_metrics.sh` exactly (matches summary `grep -hE "ERROR|WARNING"`). CLI: `--host`, `--port`, `--proto`, `--json`, `--output`, `--probes`, `--interval`, `--date`, `--threshold`, `--no-range`.
+
 ### Long-term Go Conversion Plan
 
-**Phase 2 — `hcpcs_alertengine` (future):** Convert `chk_metrics.sh` + `chk_collected_metrics.sh` into a single Go binary `hcpcs_alertengine/` that:
-- Reads `hcpcs_hourly_alerts.json` / `hcpcs_daily_alerts.json` for query definitions
-- Issues Prometheus HTTP queries directly (replaces 50+ curl subprocess calls)
-- Evaluates thresholds and writes formatted `health_report_metrics.log`
-- Validates pre-collected metric files for `chk_collected_metrics.sh` logic
-- Benefits: eliminates SIGPIPE risk, single HTTP connection pool, structured error handling
+**Phase 3 — `chk_collected_metrics`:** Convert `chk_collected_metrics.sh` to Go. Reads pre-collected Prometheus JSON (different schema: AlertID/TelemetryID format from `hcpcs_alerts_def.json`), processes against alert definitions, writes `.log` + `.json` + `_pretty.json` output. Lower priority since it requires a separate collection binary to produce the input JSON.
 
 ### Configuration Files
 

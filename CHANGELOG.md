@@ -1,3 +1,12 @@
+## v1.2.66
+- hcpcs_alertengine: New Go binary (`hcpcs_alertengine/`) that replaces the curl+jq pipeline in `chk_metrics.sh`. Issues all Prometheus range/instant queries in parallel (goroutines), eliminating the sequential-per-query bottleneck. Handles protocol auto-switch (https→http), unreachable Prometheus (clean exit 0), per-alert step overrides, consecutive probe logic, label fan-out, Exclude filter, Ignore criteria, TELEMETRY mode (min/max/avg), and %PROBESTEP/%THRESHOLD substitution. Output format matches `chk_metrics.sh` exactly so runchk.sh summary grep works. Falls back to curl+jq if binary absent.
+- chk_metrics.sh: Add Go binary dispatch block after `gsc_rotate_log`; passes `--host`, `--port`, `--proto`, `--output`, `--json`, `--probes`, `--interval`, `--date`, `--threshold`, `--no-range` as appropriate from shell parameters.
+
+### SHA256
+```
+a011d94264650f001bfa35860142f5e8385aff9e37916f04451ee58bf0a4c81e  process_health_v1.2.66.tar.xz
+```
+
 ## v1.2.65
 - parse_instances: New Go binary (`parse_instances/`) that replaces the N×M jq subprocess loop in `parse_instances_info.sh`. Reads instances JSON (strips leading `#` comment line), outputs per-node and per-service summary to `hcpcs_services_info.log`. Preserves insertion-order service registry. Falls back to jq if binary absent.
 - chk_snodes: New Go binary (`chk_snodes/`) that replaces grep-on-JSON checks in `chk_snodes.sh`. Validates `storageType==HCPS_S3`, `https==true`, `port==443`, `maxConnections==1024` using struct fields — fixes false negatives from the original `grep "https" | grep -c "true"` pattern. Falls back to jq if binary absent.
