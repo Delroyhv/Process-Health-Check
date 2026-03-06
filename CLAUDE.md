@@ -87,6 +87,7 @@ All Go binaries follow the same pattern: `<name>/main.go` + `<name>/Makefile`, c
 | `chk_alerts` | `chk_alerts/` | `.events[].time` bug + jq | `chk_alerts.sh` |
 | `hcpcs_alertengine` | `hcpcs_alertengine/` | Sequential curl+jq (50+ queries) | `chk_metrics.sh` |
 | `hcpcs_db` | `hcpcs_db/` | — (new: results DB) | `runchk.sh` (when `HCPCS_DB` set) |
+| `chk_partition_sizes` | `chk_partition_sizes/` | — (new) | `chk_partition_sizes.sh` |
 
 **`partition_growth/main.go`** — Analyzes partition growth trends from JSON event data. `-a` flag outputs chart + `avg_monthly_growth: N splits/month` line.
 
@@ -102,6 +103,8 @@ All Go binaries follow the same pattern: `<name>/main.go` + `<name>/Makefile`, c
 
 **`hcpcs_alertengine/main.go`** — Replaces the sequential curl+jq query loop in `chk_metrics.sh`. Issues all Prometheus range/instant queries in parallel (goroutines). Handles: protocol auto-switch (https→http), unreachable Prometheus (clean exit 0, single ERROR line), per-alert `Step` override, `ConsecutiveProbes` logic, label fan-out, `Exclude` filter, `Ignore` criteria, TELEMETRY mode (min/max/avg over all probes), `%PROBESTEP`/`%THRESHOLD` substitution. Output format mirrors `chk_metrics.sh` exactly (matches summary `grep -hE "ERROR|WARNING"`). CLI: `--host`, `--port`, `--proto`, `--json`, `--output`, `--probes`, `--interval`, `--date`, `--threshold`, `--no-range`.
 
+**`chk_partition_sizes/main.go`** — Reads `clusterPartitionState_Metadata-Coordination_*.json` files (object keyed by partition string ID; values have `partitionId`, `partitionSize` bytes, `keySpaceId`, `nodes[]`). Deduplicates by `partitionId` across multiple files. Sorts by `partitionSize` descending. Writes flat tab-separated `partition_size_analysis.log`. Emits `[WARNING] <threshold> Partitions are larger than expected … MDCO may need investigation.` when largest >= 1.5× split threshold. Threshold string parsed with unit conversion (Gi/G/Mi/M/Ki/K → bytes; all treated as binary). Integer-only 1.5× check: `2×max >= 3×thresh`. CLI: `--dir`, `--threshold`, `--output`. Shell caller: `chk_partition_sizes.sh` (reads threshold from `health_report_partitionInfo.log`; falls back to jq). Called from `runchk.sh` after `chk_partInfo.sh`.
+
 **`hcpcs_db/main.go`** — SQLite-backed results database (pure Go via `modernc.org/sqlite`, CGO-free). Stores per-run severity counts and all filtered issues. Auto-invoked by `runchk.sh` when `HCPCS_DB` env var is set.
 
 Schema: `runs` (id, ts, run_dir, sr_number, customer, cs_version, node_count, elapsed_sec, *_count, issues_total) + `issues` (run_id, severity, source, message).
@@ -111,12 +114,17 @@ Commands:
 - `list [--limit N] [--sr SR]` — Aligned table: ID, Timestamp, SR, Customer, Version, Nodes, Elapsed, CRIT/DANG/ERR/WARN/ACT.
 - `show <id>` — Group issues by severity with `── SEVERITY ──` headers.
 - `trend <sr>` — Per-run row for one SR with ↑/↓/→ trend arrows vs previous run.
+- `serve [--db PATH]` — MCP stdio server (JSON-RPC 2.0). Exposes `list_runs`, `show_run`, `trend_sr`, `record_run` as MCP tools callable by Claude or any MCP-compatible agent.
 
 Integration:
 - `runchk.sh`: after `_elapsed` is computed, if `HCPCS_DB` is set → dispatch binary with `record --elapsed ${_elapsed}` (+ `--customer` from `HCPCS_CUSTOMER` env var).
 - `gsc_healthcheck.sh`: passes `HCPCS_CUSTOMER="${_customer}"` when calling `runchk.sh`.
+- `~/.claude/settings.json`: registers `hcpcs_db serve` as an MCP server so Claude can call DB tools natively.
+- `~/.claude/skills/hcpcs-db.md`: `/hcpcs-db` skill for manual invocation (list/show/trend/record).
 
 Default DB path: `~/.local/share/hcpcs/results.db` (overridden by `HCPCS_DB` env var).
+
+**MCP serve implementation:** JSON-RPC 2.0 over stdin/stdout. Responds to `initialize` (returns `protocolVersion: 2024-11-05`), `tools/list` (returns 4 tool defs with JSON Schema), and `tools/call`. Notifications (no `id` field) are silently ignored. Print helpers (`printList`, `printShow`, `printTrend`) accept `io.Writer` so they serve both CLI (stdout) and MCP (strings.Builder → content text) paths.
 
 ### Long-term Go Conversion Plan
 
@@ -128,6 +136,8 @@ Default DB path: `~/.local/share/hcpcs/results.db` (overridden by `HCPCS_DB` env
 - **`memcheck.conf`** — Expected RSS memory bounds (min/max MB) per service name
 - **`hcpcs_hourly_alerts.json`** / **`hcpcs_daily_alerts.json`** — Prometheus alert query definitions with warning/error thresholds (50+ metrics)
 - **`os.conf`** — OS-level configuration
+- **`docker_version.conf`** — Minimum Docker version (`_minimum_version=20.10.5`). Sourced by `chk_docker.sh`; `_ver_gte()` helper compares each node's Docker version (major.minor.patch). WARNING if below minimum.
+- **`cs_version.conf`** — Minimum HCP-CS version (`_cs_version=2.1.65`). Sourced by `chk_cluster.sh`; `_ver_gte()` helper compares detected product version (up to 4 parts: major.minor.patch.build). WARNING if below minimum.
 
 ## Coding Conventions
 

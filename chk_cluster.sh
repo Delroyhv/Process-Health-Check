@@ -11,6 +11,12 @@ _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "${_script_dir}/gsc_core.sh"
 
+# Load minimum HCP-CS version from cs_version.conf
+_cs_version=""
+# shellcheck disable=SC1091
+[[ -f "${_script_dir}/cs_version.conf" ]] && . "${_script_dir}/cs_version.conf"
+_CS_MIN_VERSION="${_cs_version:-2.1.65}"
+
 _log_dir=${1:-"."}
 _debug=0
 _output_file="health_report_cluster.log"
@@ -18,6 +24,21 @@ _output_file="health_report_cluster.log"
 gsc_rotate_log "${_output_file}"
 
 ###################################################
+
+# _ver_gte v1 v2 — returns 0 (true) if version string v1 >= v2 (major.minor.patch.build)
+_ver_gte() {
+    local _i _a _b
+    local -a _v1 _v2
+    IFS='.' read -ra _v1 <<< "$1"
+    IFS='.' read -ra _v2 <<< "$2"
+    for _i in 0 1 2 3; do
+        _a=${_v1[_i]:-0}
+        _b=${_v2[_i]:-0}
+        (( _a > _b )) && return 0
+        (( _a < _b )) && return 1
+    done
+    return 0
+}
 
 _latest_version="2.6.1.68"
 
@@ -38,6 +59,9 @@ else
         gsc_loga "WARNING: ${_product_version_file} DOES NOT CONTAIN HCP-CS VERSION NUMBER."
     else
         gsc_log_info "Cloud Scale Version: ${_version_num}" # Explicitly print for easy parsing
+        if ! _ver_gte "${_version_num}" "${_CS_MIN_VERSION}"; then
+            gsc_loga "WARNING: HCP-CS version ${_version_num} is below minimum supported version ${_CS_MIN_VERSION} — upgrade required"
+        fi
         if [[ "${_version_num}" != "${_latest_version}" ]]; then
             gsc_loga "WARNING: product version ${_version_num} is not the latest (${_latest_version})"
         fi

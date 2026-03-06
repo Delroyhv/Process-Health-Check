@@ -33,6 +33,12 @@ _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "${_script_dir}/gsc_core.sh"
 
+# Load minimum Docker version from docker_version.conf
+_minimum_version=""
+# shellcheck disable=SC1091
+[[ -f "${_script_dir}/docker_version.conf" ]] && . "${_script_dir}/docker_version.conf"
+_DOCKER_MIN_VERSION="${_minimum_version:-20.10.5}"
+
 _default_output_file="health_report_docker.log"
 _default_docker_log="docker.log"
 _log_dir="."
@@ -68,6 +74,21 @@ getOptions() {
 }
 
 ############################
+
+# _ver_gte v1 v2 — returns 0 (true) if version string v1 >= v2 (major.minor.patch)
+_ver_gte() {
+    local _i _a _b
+    local -a _v1 _v2
+    IFS='.' read -ra _v1 <<< "$1"
+    IFS='.' read -ra _v2 <<< "$2"
+    for _i in 0 1 2; do
+        _a=${_v1[_i]:-0}
+        _b=${_v2[_i]:-0}
+        (( _a > _b )) && return 0
+        (( _a < _b )) && return 1
+    done
+    return 0
+}
 
 getOptions "$@"
 
@@ -155,6 +176,12 @@ for _file in "${_ver_files[@]}"; do
         "${_inotify_val}" "${_locked_mem_disp}")"
 
     _node_issues=0
+
+    # Docker minimum version check (from docker_version.conf)
+    if [[ -n "${_docker_ver}" ]] && ! _ver_gte "${_docker_ver}" "${_DOCKER_MIN_VERSION}"; then
+        ((_node_issues++)); ((_err++))
+        gsc_loga "WARNING: ${_node}: Docker ${_docker_ver} is below minimum required version ${_DOCKER_MIN_VERSION} — upgrade required"
+    fi
 
     # Docker version — warn if major version is EOL
     if [[ "${_docker_major}" =~ ^[0-9]+$ ]] && \

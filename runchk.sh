@@ -122,6 +122,9 @@ gsc_log_info "# RUN get_partition_tool_info.sh"
 gsc_log_info "# RUN chk_partInfo.sh"
 "${_script_dir}/chk_partInfo.sh" -d . 2>&1 | tee -a "${_tmp_report_output}" || true
 
+gsc_log_info "# RUN chk_partition_sizes.sh"
+"${_script_dir}/chk_partition_sizes.sh" -d . 2>&1 | tee -a "${_tmp_report_output}" || true
+
 # ── Partition Growth Chart ───────────────────────────────────────────────────
 # Run before get_partition_details.sh so avg_monthly_growth is available for sizing output.
 _part_json="supportLogs/partitionSplit.json"
