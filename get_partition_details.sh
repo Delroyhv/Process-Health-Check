@@ -130,6 +130,7 @@ BEGIN {
     node_idx = 0
     total_l = 0
     max_count = 0
+    crit_count = 0; danger_count = 0
     # Color codes
     C_ACTION = "\033[38;2;37;99;235m"
     C_GOOD   = "\033[32m"
@@ -174,8 +175,8 @@ in_s1 {
             if (cnt > max_count) max_count = cnt
             st = "good"
             c_lvl = C_GOOD
-            if (cnt > t_c) { st = "CRITICAL"; c_lvl = C_CRIT }
-            else if (cnt > t_d) { st = "DANGER"; c_lvl = C_DANGER }
+            if (cnt > t_c) { st = "CRITICAL"; c_lvl = C_CRIT; crit_count++ }
+            else if (cnt > t_d) { st = "DANGER"; c_lvl = C_DANGER; danger_count++ }
             else if (cnt > t_w) { st = "WARNING"; c_lvl = C_WARN }
             
             for(i=1; i<=n; i++) {
@@ -294,6 +295,20 @@ in_s2 {
 END {
     label = "[ACTION  ]"
     if (use_color == 1) { label = C_ACTION label C_RESET }
+
+    if (crit_count > 0) {
+        if (use_color == 1) {
+            printf "\n%s[CRITICAL]%s Partition count CRITICAL: %d node(s) with partition copies/node >= %d (max: %d)\n", C_CRIT, C_RESET, crit_count, t_c, max_count
+        } else {
+            printf "\n[CRITICAL] Partition count CRITICAL: %d node(s) with partition copies/node >= %d (max: %d)\n", crit_count, t_c, max_count
+        }
+    } else if (danger_count > 0) {
+        if (use_color == 1) {
+            printf "\n%s[DANGER]%s Partition count DANGER: %d node(s) with partition copies/node >= %d (max: %d)\n", C_DANGER, C_RESET, danger_count, t_d, max_count
+        } else {
+            printf "\n[DANGER] Partition count DANGER: %d node(s) with partition copies/node >= %d (max: %d)\n", danger_count, t_d, max_count
+        }
+    }
 
     if (max_count > 1500 && (st_val == "1G" || st_val == "1Gi")) {
         print "\n[ALERT] High partition count (" max_count ") detected with " st_val " split threshold."
