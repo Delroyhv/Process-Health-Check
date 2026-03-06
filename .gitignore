@@ -18,6 +18,16 @@ gsc_docker_prometheus.sh
 # Go build artifacts (partition_growth/build/ binaries are intentionally tracked)
 partition_growth/*.test
 
+# SQLite databases — private test data, never upload
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# hcpcs_db local binary built without platform suffix (go build main.go)
+hcpcs_db/hcpcs_db
+
 # Temporary directories created by scripts
 tmp/
 temp/
