@@ -1,3 +1,17 @@
+## v1.2.68
+- hcpcs_db: Add `serve` subcommand — JSON-RPC 2.0 MCP stdio server exposing four tools: `list_runs`, `show_run`, `trend_sr`, `record_run`. Refactored `cmdList/Show/Trend/Record` to use `io.Writer` helpers so CLI and MCP paths share the same query logic. Registered in `~/.claude/settings.json` as an MCP server and as a `/hcpcs-db` Claude Code skill.
+- chk_partition_sizes: New Go binary (`chk_partition_sizes/`) that reads `partitionSize` from all `clusterPartitionState_Metadata-Coordination_*.json` files, deduplicates by partition ID, sorts descending, writes a flat tab-separated file, and emits `[WARNING]` if the largest partition ≥ 1.5× the split threshold. Threshold accepts unit suffixes (Gi/G/Mi/M/Ki/K, all binary). Shell wrapper `chk_partition_sizes.sh` dispatches the binary with platform detection and falls back to jq.
+- chk_cluster.sh: Add minimum CS product version check. Sources `cs_version.conf` (`_cs_version=2.1.65`); emits `[WARNING]` when the detected version is below the minimum.
+- chk_docker.sh: Add minimum Docker version check. Sources `docker_version.conf` (`_minimum_version=20.10.5`); emits `[WARNING]` when the detected Docker version is below the minimum.
+- docker_version.conf, cs_version.conf: New configuration files for version floor overrides.
+- .gitignore: Exclude SQLite database files (`*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`, `*.sqlite3`) and the bare `hcpcs_db/hcpcs_db` local build artifact.
+- test_battery.sh, test_healthcheck.sh, test_concurrency.sh, test_port_logic.sh: Add `-d DIR` / `--dir DIR` option; default to `/ci` if it exists, else `/opt/ci`.
+
+### SHA256
+```
+f8bac6c3a1608eaf5ef14a4fcc5206ee08774ed103ae72307770ba3f16322430  process_health_v1.2.68.tar.xz
+```
+
 ## v1.2.67
 - hcpcs_db: New Go binary (`hcpcs_db/`) backed by SQLite (`modernc.org/sqlite`, pure Go / CGO-free). Stores health check run results for trending and audit. Commands: `record` (scan `health_report*.log`, apply `_issues_filter` noise exclusions, insert run + issues in one transaction); `list` (aligned table with SR, customer, version, node count, elapsed, severity counts); `show <id>` (issues grouped by severity with headers); `trend <sr>` (per-run severity counts with ↑/↓/→ trend arrows). Auto-called by `runchk.sh` after each run when `HCPCS_DB` env var is set.
 - runchk.sh: After computing `_elapsed`, dispatch `hcpcs_db record --elapsed N [--customer NAME]` when `HCPCS_DB` is set. Customer name sourced from `HCPCS_CUSTOMER` env var (set by `gsc_healthcheck.sh`).
