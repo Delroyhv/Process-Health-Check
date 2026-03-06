@@ -158,9 +158,25 @@ main() {
   # Prompt for sudo password once at the start if needed
   gsc_prompt_sudo_password
 
+  # Resolve SR base directory early — needed for both expand root and dir discovery
+  local _sr_base_dir=""
+  if [[ -d "${_sr_number}" ]]; then
+    _sr_base_dir="${_sr_number}"
+  elif [[ -d "/ci/${_sr_number}" ]]; then
+    _sr_base_dir="/ci/${_sr_number}"
+  else
+    _sr_base_dir="."
+  fi
+
   gsc_log_info "Step 1: Expanding support bundle..."
   local _expand_cmd=("${_script_dir}/expand_hcpcs_support.sh")
-  [[ -n "${_support_log}" ]] && _expand_cmd+=("-f" "${_support_log}")
+  if [[ -n "${_support_log}" ]]; then
+    _expand_cmd+=("-f" "${_support_log}")
+  else
+    # No explicit file — let expand_hcpcs_support.sh auto-discover all bundles
+    # under the SR directory rather than the current working directory
+    _expand_cmd+=("-r" "${_sr_base_dir}")
+  fi
 
   local _tmp_dir _tmp_out
   _tmp_dir=$(mktemp -d)
@@ -170,14 +186,6 @@ main() {
   ( "${_expand_cmd[@]}" ) 2>&1 | tee "${_tmp_out}" || gsc_log_info "Expansion step finished."
 
   gsc_log_info "Step 2: Locating health check directories for SR ${_sr_number}..."
-  local _sr_base_dir=""
-  if [[ -d "${_sr_number}" ]]; then
-    _sr_base_dir="${_sr_number}"
-  elif [[ -d "/ci/${_sr_number}" ]]; then
-    _sr_base_dir="/ci/${_sr_number}"
-  else
-    _sr_base_dir="."
-  fi
 
   local -a _target_dirs=()
   while IFS= read -r _d; do

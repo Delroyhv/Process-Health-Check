@@ -1,3 +1,11 @@
+## v1.2.63
+- gsc_healthcheck.sh: Fix auto-discovery mode (no -f) — resolve SR base directory before calling expand_hcpcs_support.sh and pass it via -r so bundles are found under the SR directory rather than the current working directory. This enables the multi-support-log path: without -f, all supportLogs_*.tar.xz under the SR dir are expanded and each resulting YYYY-MM-DD_HH-MM-SS directory is processed with a unique customer name suffix.
+
+### SHA256
+```
+07576d33a6e5e964be045a72ae921b35fa1e07264321eca11caae1d490dedf9c  process_health_v1.2.63.tar.xz
+```
+
 ## v1.2.62
 - gsc_healthcheck.sh: Handle multiple support log bundles. After expansion, all `YYYY-MM-DD_HH-MM-SS` directories are collected (not just the most recent). When more than one is present each gets a unique random 4-digit suffix appended to the customer name (e.g. `ACME_2341`, `ACME_8076`) before calling `gsc_prometheus.sh`, preventing container name collisions. Single support log behaviour is unchanged. Extracted Steps 3-5 into `_run_dir_checks()` helper called in a subshell per directory.
 
