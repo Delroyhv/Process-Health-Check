@@ -1,3 +1,13 @@
+## v1.2.61
+- gsc_healthcheck_report.sh: Add `--chart <sections>` option to control partition growth chart output in reports. Accepts a comma-separated list of sections: `yearly`, `quarterly`, `monthly`. When omitted, no chart section is included. Sections are always rendered in file order (yearly → quarterly → monthly) regardless of list order. Converts option parsing from `getopts` to `while/case` to support long options.
+- runchk.sh: Add `--chart` option; parses and forwards the value to `gsc_healthcheck_report.sh` when `--report` is also set.
+- generate_report.sh: Add `--chart` support with the same section-selection logic, sourcing from `partition_splits.log`. When `--chart` is absent, the Growth Trends section is omitted. Converts option parsing from `getopts` to `while/case`.
+
+### SHA256
+```
+0f6897bd2c7bbe1801fce5c451d60221e1b9f6b4a62329dbc0f22f8cbacb5237  process_health_v1.2.61.tar.xz
+```
+
 ## v1.2.60
 - parse_instances_info.sh: Fix missing `hcpcs_services_info.log` on modern bundles. Added fallback candidate search: `config_foundry_instances.out` → `foundry_instances.json` → `instances.json`. Resolves `[WARN] Cannot find 'hcpcs_services_info.log'` in `chk_service_placement.sh`, `prep_services_instances.sh`, and `chk_services_memory.sh`.
 

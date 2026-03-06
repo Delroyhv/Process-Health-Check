@@ -154,15 +154,22 @@ main() {
   cd "${_target_dir}"
 
   # Step 4: Prometheus Setup
-  local _snapshot
-  _snapshot=$(ls psnap_*.tar.xz 2>/dev/null | head -n 1 || echo "")
+  local -a _snapshots=()
+  local _snapshot _prom_customer
+  while IFS= read -r _snapshot; do [[ -n "${_snapshot}" ]] && _snapshots+=("${_snapshot}"); done < <(ls psnap_*.tar.xz 2>/dev/null || true)
 
-  if [[ "${_no_psnap}" -eq 0 && "${_no_metrics}" -eq 0 && -n "${_snapshot}" ]]; then
-    gsc_log_info "Step 4: Running gsc_prometheus.sh with gsc_sudo for snapshot: ${_snapshot}"
-    gsc_sudo "${_script_dir}/gsc_prometheus.sh" -c "${_customer}" -s "${_sr_number}" -f "${_snapshot}" -b .
-  elif [[ "${_no_psnap}" -eq 1 || "${_no_metrics}" -eq 1 ]]; then
+  if [[ "${_no_psnap}" -eq 1 || "${_no_metrics}" -eq 1 ]]; then
     gsc_log_info "Step 4: Skipping Prometheus setup (--no-psnap or --no-metrics set)."
-  elif [[ "${_no_metrics}" -eq 0 ]]; then
+  elif [[ "${#_snapshots[@]}" -gt 0 ]]; then
+    for _snapshot in "${_snapshots[@]}"; do
+      _prom_customer="${_customer}"
+      if [[ "${#_snapshots[@]}" -gt 1 ]]; then
+        _prom_customer=$(printf '%s_%04d' "${_customer}" "$(( RANDOM % 9000 + 1000 ))")
+      fi
+      gsc_log_info "Step 4: Running gsc_prometheus.sh with gsc_sudo for snapshot: ${_snapshot} (customer: ${_prom_customer})"
+      gsc_sudo "${_script_dir}/gsc_prometheus.sh" -c "${_prom_customer}" -s "${_sr_number}" -f "${_snapshot}" -b .
+    done
+  else
     if [[ -f "healthcheck.conf" ]]; then
       gsc_log_info "Step 4: Prometheus already set up (healthcheck.conf exists)."
     else

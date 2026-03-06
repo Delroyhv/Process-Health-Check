@@ -11,18 +11,22 @@ _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 _report_file="health_report.md"
 _log_dir="."
+_chart_sections=""
 
 usage() {
-    echo "Usage: $0 [-o report.md] [-d log_directory]"
-    echo "  -o <file>   Output Markdown file (default: health_report.md)"
-    echo "  -d <dir>    Directory containing health_report_*.log files (default: .)"
+    echo "Usage: $0 [-o report.md] [-d log_directory] [--chart yearly,quarterly,monthly]"
+    echo "  -o <file>        Output Markdown file (default: health_report.md)"
+    echo "  -d <dir>         Directory containing health_report_*.log files (default: .)"
+    echo "  --chart <secs>   Comma-separated chart sections to include (yearly, quarterly, monthly)"
     exit 1
 }
 
-while getopts "o:d:h" _opt; do
-    case "${_opt}" in
-        o) _report_file="${OPTARG}" ;;
-        d) _log_dir="${OPTARG}" ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -o) _report_file="$2"; shift 2 ;;
+        -d) _log_dir="$2";     shift 2 ;;
+        --chart) _chart_sections="$2"; shift 2 ;;
+        -h|--help) usage ;;
         *) usage ;;
     esac
 done
@@ -109,10 +113,19 @@ fi
     echo ""
 
     echo "## 4. Partition Analysis"
-    if [[ -f "partition_growth_chart.log" ]]; then
+    if [[ -n "${_chart_sections}" && -f "partition_splits.log" ]]; then
         echo "### Growth Trends"
         echo '```text'
-        cat partition_growth_chart.log
+        for _sec in yearly quarterly monthly; do
+            [[ ",${_chart_sections}," == *",${_sec},"* ]] || continue
+            case "${_sec}" in
+                yearly)    _hdr="--- Yearly Partition Growth ---" ;;
+                quarterly) _hdr="--- Quarterly Partition Growth ---" ;;
+                monthly)   _hdr="--- Monthly Partition Growth ---" ;;
+            esac
+            awk -v h="${_hdr}" 'found && /^--- / {exit} $0==h{found=1} found' partition_splits.log
+            echo ""
+        done
         echo '```'
     fi
 

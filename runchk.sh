@@ -20,10 +20,11 @@ _config_file="healthcheck.conf"
 _full_detail=0
 _no_metrics=0
 _report_file=""
+_chart_sections=""
 
 # ── Usage ────────────────────────────────────────────────────────────────────
 usage() {
-    echo "Usage: runchk.sh [-f healthcheck.conf] [--full-detail] [--no-metrics] [--report report.md] [-h]"
+    echo "Usage: runchk.sh [-f healthcheck.conf] [--full-detail] [--no-metrics] [--report report.md] [--chart yearly,quarterly,monthly] [-h]"
 }
 
 # ── Option parsing ───────────────────────────────────────────────────────────
@@ -43,6 +44,13 @@ while [[ $# -gt 0 ]]; do
                 _report_file="$2"; shift 2
             else
                 gsc_log_error "--report requires a filename"; exit 1
+            fi
+            ;;
+        --chart)
+            if [[ -n "${2-}" ]]; then
+                _chart_sections="$2"; shift 2
+            else
+                gsc_log_error "--chart requires a value (e.g. quarterly,yearly,monthly)"; exit 1
             fi
             ;;
         -h|--help) usage; exit 0 ;;
@@ -132,9 +140,10 @@ if [[ -n "${_part_json}" && -f "${_part_json}" && -x "${_pg_bin}" ]]; then
         gsc_log_warn "gnuplot not found — plot requirements logged to partition_growth_plot.log"
     fi
     if [[ -s partition_growth_chart.log ]]; then
-        gsc_log_info "Partition growth rates generated: partition_growth_chart.log"
+        cp partition_growth_chart.log partition_splits.log
+        gsc_log_info "Partition growth rates generated: partition_growth_chart.log (full detail: partition_splits.log)"
         if [[ -z "${_report_file}" ]]; then
-            sed -n '/--- Yearly/,/Grand Total/p' partition_growth_chart.log
+            awk '/--- Quarterly Partition Growth ---/{p=1} /--- Monthly Partition Growth ---/{p=0} p' partition_splits.log
         fi
     fi
 else
@@ -214,14 +223,16 @@ fi
 
 # ── Final Report ─────────────────────────────────────────────────────────────
 if [[ -n "${_report_file}" ]]; then
-    "${_script_dir}/gsc_healthcheck_report.sh" -o "${_report_file}" -d .
+    _report_args=(-o "${_report_file}" -d .)
+    [[ -n "${_chart_sections}" ]] && _report_args+=(--chart "${_chart_sections}")
+    "${_script_dir}/gsc_healthcheck_report.sh" "${_report_args[@]}"
 fi
 
 # ── Final Summary ────────────────────────────────────────────────────────────
 _end_epoch=$(date -u +%s)
 _elapsed=$(( _end_epoch - _current_time_epoch ))
 
-_issues_filter='^health_report_messages\.log:|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source.s. fully reachable|^[[:space:]]*[0-9]+ [0-9.]+[[:space:]]*\[(CRITICAL|WARNING|DANGER|good)\]|^[[:space:]]*[0-9]+-[0-9]+[[:space:]]*:[[:space:]]*\[(WARNING|DANGER|CRITICAL|good)\]'
+_issues_filter='^health_report_messages\.log:|: source [^ ]+ (unreachable|degraded)|: only [0-9]+ of [0-9]+ source.s. fully reachable|^[[:space:]]*[0-9]+ [0-9.]+[[:space:]]*\[(CRITICAL|WARNING|DANGER|good)\]|^[[:space:]]*([0-9]+-[0-9]+|>=[[:space:]]*[0-9]+)[[:space:]]*:[[:space:]]*\[(WARNING|DANGER|CRITICAL|good)\]'
 _all_issues=$(grep -hE "ERROR|WARNING|CRITICAL|DANGER|ACTION|ALERT" health_report*.log 2>/dev/null | grep -Ev "${_issues_filter}" || true)
 _issues_count=$(printf '%s\n' "${_all_issues}" | grep -c . 2>/dev/null || echo 0)
 
