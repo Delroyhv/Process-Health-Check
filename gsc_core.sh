@@ -286,12 +286,12 @@ _GSC_SUDO_PASS_VAULTED=""
 
 gsc_vault_encrypt() {
   local _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
-  if [[ -x "${_bin}" ]]; then "${_bin}" -encrypt "$1"; else echo "$1"; fi
+  if [[ -x "${_bin}" ]]; then "${_bin}" -op encrypt "$1"; else echo "$1"; fi
 }
 
 gsc_vault_decrypt() {
   local _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
-  if [[ -x "${_bin}" ]]; then "${_bin}" -decrypt "$1"; else echo "$1"; fi
+  if [[ -x "${_bin}" ]]; then "${_bin}" -op decrypt "$1"; else echo "$1"; fi
 }
 
 gsc_prompt_sudo_password() {

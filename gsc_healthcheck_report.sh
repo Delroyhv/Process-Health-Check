@@ -3,7 +3,7 @@
 # gsc_healthcheck_report.sh – Generates a styled Markdown or PDF health report
 #                             from GSC health check logs.
 #
-# Usage: gsc_healthcheck_report.sh [-d dir] [-o outfile] [-f md|pdf] [-h]
+# Usage: gsc_healthcheck_report.sh [-d dir] [-o outfile] [-f md|pdf] [--chart sections] [-h]
 #
 
 _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,24 +14,28 @@ _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _log_dir="."
 _out_file="health_report.md"
 _format="md"
+_chart_sections=""
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") [-d dir] [-o outfile] [-f md|pdf] [-h]
+Usage: $(basename "$0") [-d dir] [-o outfile] [-f md|pdf] [--chart sections] [-h]
 
-  -d <dir>      Directory with health_report_*.log and lshw.log (default: .)
-  -o <outfile>  Output file (default: health_report.md)
-  -f md|pdf     Output format; auto-detected from -o extension if omitted
-  -h            Show this help
+  -d <dir>         Directory with health_report_*.log and lshw.log (default: .)
+  -o <outfile>     Output file (default: health_report.md)
+  -f md|pdf        Output format; auto-detected from -o extension if omitted
+  --chart <secs>   Comma-separated chart sections to include in report
+                   (yearly, quarterly, monthly; e.g. quarterly,yearly)
+  -h               Show this help
 EOF
 }
 
-while getopts "d:o:f:h" _opt; do
-    case "${_opt}" in
-        d) _log_dir="${OPTARG}" ;;
-        o) _out_file="${OPTARG}" ;;
-        f) _format="${OPTARG}" ;;
-        h) usage; exit 0 ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d) _log_dir="$2";        shift 2 ;;
+        -o) _out_file="$2";       shift 2 ;;
+        -f) _format="$2";         shift 2 ;;
+        --chart) _chart_sections="$2"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
         *) usage; exit 1 ;;
     esac
 done
@@ -169,6 +173,12 @@ _colorize_pre() {
         -e 's/ERROR/<span style="color:#ff6666;font-weight:bold">ERROR<\/span>/g'
 }
 
+# Extract one named section from partition_splits.log (stop before next --- header)
+_extract_chart_section() {
+    local _header="$1" _file="$2"
+    awk -v h="${_header}" 'found && /^--- / {exit} $0==h{found=1} found' "${_file}"
+}
+
 # ── HTML page wrapper ─────────────────────────────────────────────────────────
 
 _html_head() {
@@ -295,9 +305,20 @@ _build_md() {
 
     printf '## 3. Partition Analysis\n\n'
 
-    if [[ -f "partition_growth_chart.log" ]]; then
+    if [[ -n "${_chart_sections}" && -f "partition_splits.log" ]]; then
         printf '### Growth Trends\n\n<pre>\n'
-        _colorize_pre < "partition_growth_chart.log"
+        {
+            local _sec
+            for _sec in yearly quarterly monthly; do
+                [[ ",${_chart_sections}," == *",${_sec},"* ]] || continue
+                case "${_sec}" in
+                    yearly)    _extract_chart_section "--- Yearly Partition Growth ---"    partition_splits.log ;;
+                    quarterly) _extract_chart_section "--- Quarterly Partition Growth ---" partition_splits.log ;;
+                    monthly)   _extract_chart_section "--- Monthly Partition Growth ---"   partition_splits.log ;;
+                esac
+                printf '\n'
+            done
+        } | _colorize_pre
         printf '</pre>\n\n'
     fi
 
@@ -399,9 +420,20 @@ _build_html() {
 
     printf '<h2>3. Partition Analysis</h2>\n'
 
-    if [[ -f "partition_growth_chart.log" ]]; then
+    if [[ -n "${_chart_sections}" && -f "partition_splits.log" ]]; then
         printf '<h3>Growth Trends</h3>\n<pre>\n'
-        _colorize_pre < "partition_growth_chart.log"
+        {
+            local _sec
+            for _sec in yearly quarterly monthly; do
+                [[ ",${_chart_sections}," == *",${_sec},"* ]] || continue
+                case "${_sec}" in
+                    yearly)    _extract_chart_section "--- Yearly Partition Growth ---"    partition_splits.log ;;
+                    quarterly) _extract_chart_section "--- Quarterly Partition Growth ---" partition_splits.log ;;
+                    monthly)   _extract_chart_section "--- Monthly Partition Growth ---"   partition_splits.log ;;
+                esac
+                printf '\n'
+            done
+        } | _colorize_pre
         printf '</pre>\n'
     fi
 
