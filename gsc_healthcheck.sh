@@ -107,51 +107,11 @@ do_cleanup() {
   fi
 }
 
-main() {
-  parse_args "$@"
-
-  if [[ "${_cleanup_mode}" -eq 1 ]]; then
-    do_cleanup
-    exit 0
-  fi
-
-  # Prompt for sudo password once at the start if needed
-  gsc_prompt_sudo_password
-
-  gsc_log_info "Step 1: Expanding support bundle..."
-  local _expand_cmd=("${_script_dir}/expand_hcpcs_support.sh")
-  [[ -n "${_support_log}" ]] && _expand_cmd+=("-f" "${_support_log}")
-  
-  local _tmp_dir _tmp_out
-  _tmp_dir=$(mktemp -d)
-  gsc_add_tmp_dir "${_tmp_dir}"              # will be cleaned up by gsc_cleanup
-  _tmp_out="${_tmp_dir}/expand.out"
-
-  ( "${_expand_cmd[@]}" ) 2>&1 | tee "${_tmp_out}" || gsc_log_info "Expansion step finished."
-
-  gsc_log_info "Step 2: Locating health check directory for SR ${_sr_number}..."
-  local _target_dir=""
-  
-  _target_dir=$(grep "Healthcheck config created:" "${_tmp_out}" | sed 's/.*: //' | xargs -r dirname | head -n 1 || echo "")
-  [[ -z "${_target_dir}" ]] && _target_dir=$(grep "Support Log extracted:" "${_tmp_out}" | sed 's/.*: //' | head -n 1 || echo "")
-  [[ -z "${_target_dir}" ]] && _target_dir=$(grep "Moved psnap into SupportLog directory:" "${_tmp_out}" | sed 's/.*: //' | xargs -r dirname | head -n 1 || echo "")
-
-  if [[ -z "${_target_dir}" ]]; then
-    local _sr_base_dir=""
-    if [[ -d "${_sr_number}" ]]; then
-      _sr_base_dir="${_sr_number}"
-    elif [[ -d "/ci/${_sr_number}" ]]; then
-      _sr_base_dir="/ci/${_sr_number}"
-    else
-      _sr_base_dir="."
-    fi
-    _target_dir=$(find "${_sr_base_dir}" -maxdepth 2 -type d -name "20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]_*" | sort -r | head -n 1 || echo "")
-  fi
-
-  [[ -n "${_target_dir}" && -d "${_target_dir}" ]] || gsc_die "Could not find health check directory for SR ${_sr_number}."
-
-  gsc_log_info "Step 3: Entering directory: ${_target_dir}"
-  cd "${_target_dir}"
+# Steps 4+5 for one extracted support log directory.
+# Called inside a subshell already cd'd into the target dir.
+# $1 = customer name to use for Prometheus (may have a _NNNN suffix)
+_run_dir_checks() {
+  local _run_customer="$1"
 
   # Step 4: Prometheus Setup
   local -a _snapshots=()
@@ -162,9 +122,9 @@ main() {
     gsc_log_info "Step 4: Skipping Prometheus setup (--no-psnap or --no-metrics set)."
   elif [[ "${#_snapshots[@]}" -gt 0 ]]; then
     for _snapshot in "${_snapshots[@]}"; do
-      _prom_customer="${_customer}"
+      _prom_customer="${_run_customer}"
       if [[ "${#_snapshots[@]}" -gt 1 ]]; then
-        _prom_customer=$(printf '%s_%04d' "${_customer}" "$(( RANDOM % 9000 + 1000 ))")
+        _prom_customer=$(printf '%s_%04d' "${_run_customer}" "$(( RANDOM % 9000 + 1000 ))")
       fi
       gsc_log_info "Step 4: Running gsc_prometheus.sh with gsc_sudo for snapshot: ${_snapshot} (customer: ${_prom_customer})"
       gsc_sudo "${_script_dir}/gsc_prometheus.sh" -c "${_prom_customer}" -s "${_sr_number}" -f "${_snapshot}" -b .
@@ -185,6 +145,66 @@ main() {
   [[ "${_no_metrics}" -eq 1 ]] && _chk_args+=("--no-metrics")
 
   "${_script_dir}/runchk.sh" "${_chk_args[@]}"
+}
+
+main() {
+  parse_args "$@"
+
+  if [[ "${_cleanup_mode}" -eq 1 ]]; then
+    do_cleanup
+    exit 0
+  fi
+
+  # Prompt for sudo password once at the start if needed
+  gsc_prompt_sudo_password
+
+  gsc_log_info "Step 1: Expanding support bundle..."
+  local _expand_cmd=("${_script_dir}/expand_hcpcs_support.sh")
+  [[ -n "${_support_log}" ]] && _expand_cmd+=("-f" "${_support_log}")
+
+  local _tmp_dir _tmp_out
+  _tmp_dir=$(mktemp -d)
+  gsc_add_tmp_dir "${_tmp_dir}"              # will be cleaned up by gsc_cleanup
+  _tmp_out="${_tmp_dir}/expand.out"
+
+  ( "${_expand_cmd[@]}" ) 2>&1 | tee "${_tmp_out}" || gsc_log_info "Expansion step finished."
+
+  gsc_log_info "Step 2: Locating health check directories for SR ${_sr_number}..."
+  local _sr_base_dir=""
+  if [[ -d "${_sr_number}" ]]; then
+    _sr_base_dir="${_sr_number}"
+  elif [[ -d "/ci/${_sr_number}" ]]; then
+    _sr_base_dir="/ci/${_sr_number}"
+  else
+    _sr_base_dir="."
+  fi
+
+  local -a _target_dirs=()
+  while IFS= read -r _d; do
+    [[ -n "${_d}" ]] && _target_dirs+=("${_d}")
+  done < <(find "${_sr_base_dir}" -maxdepth 1 -type d -name "20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]_*" | sort)
+
+  [[ "${#_target_dirs[@]}" -gt 0 ]] || gsc_die "Could not find any health check directories for SR ${_sr_number}."
+
+  local _multi_log=0
+  [[ "${#_target_dirs[@]}" -gt 1 ]] && _multi_log=1
+
+  if [[ "${_multi_log}" -eq 1 ]]; then
+    gsc_log_info "Found ${#_target_dirs[@]} support log directories — each will use a unique customer name suffix."
+  fi
+
+  local _target_dir _run_customer
+  for _target_dir in "${_target_dirs[@]}"; do
+    _run_customer="${_customer}"
+    if [[ "${_multi_log}" -eq 1 ]]; then
+      _run_customer=$(printf '%s_%04d' "${_customer}" "$(( RANDOM % 9000 + 1000 ))")
+    fi
+    gsc_log_info "Step 3: Entering directory: ${_target_dir} (customer: ${_run_customer})"
+    (
+      cd "${_target_dir}"
+      _run_dir_checks "${_run_customer}"
+    )
+  done
 
   gsc_log_success "Health check complete for ${_customer} / ${_sr_number}."
 }

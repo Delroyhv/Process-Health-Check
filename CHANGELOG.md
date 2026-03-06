@@ -1,3 +1,11 @@
+## v1.2.62
+- gsc_healthcheck.sh: Handle multiple support log bundles. After expansion, all `YYYY-MM-DD_HH-MM-SS` directories are collected (not just the most recent). When more than one is present each gets a unique random 4-digit suffix appended to the customer name (e.g. `ACME_2341`, `ACME_8076`) before calling `gsc_prometheus.sh`, preventing container name collisions. Single support log behaviour is unchanged. Extracted Steps 3-5 into `_run_dir_checks()` helper called in a subshell per directory.
+
+### SHA256
+```
+c8e8290c26565d68dde5f877bcd437c6fa3bfa78afa330d43326f815cb64184d  process_health_v1.2.62.tar.xz
+```
+
 ## v1.2.61
 - gsc_healthcheck_report.sh: Add `--chart <sections>` option to control partition growth chart output in reports. Accepts a comma-separated list of sections: `yearly`, `quarterly`, `monthly`. When omitted, no chart section is included. Sections are always rendered in file order (yearly → quarterly → monthly) regardless of list order. Converts option parsing from `getopts` to `while/case` to support long options.
 - runchk.sh: Add `--chart` option; parses and forwards the value to `gsc_healthcheck_report.sh` when `--report` is also set.
