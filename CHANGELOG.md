@@ -1,3 +1,11 @@
+## v1.2.70
+- gsc_prometheus.sh: Fix Prometheus container immediately crashing on SELinux-enforcing systems (RHEL/AlmaLinux/Fedora). Both volume mounts now include the `:z` shared-relabel flag (`-v data:/prometheus:z` and `-v prometheus.yml:/etc/prometheus/prometheus.yml:ro,z`). Without `:z`, SELinux blocked Prometheus (UID 65534) from reading the config file and writing `queries.active`, causing an immediate panic and container exit. The `:z` flag is a no-op on non-SELinux systems.
+
+### SHA256
+```
+082767b887c6a2a822010f6c0c0d5d8740e645241b773353b98e4e09cc56da22  process_health_v1.2.70.tar.xz
+```
+
 ## v1.2.69
 - get_partition_details.sh: Emit a dedicated `CRITICAL: Partition count: N node(s) with partition copies/node >= 2000 (max: M)` summary line when any node exceeds the critical partition threshold (>= 2000 copies/node). Similarly emits `DANGER: Partition count: ...` for the danger threshold (>= 1500). These lines surface in the `CRITICAL / ALERT` and `DANGER` sections of the runchk.sh summary output, consistent with the format of other check scripts. The table rows (one per node) remain in the detail section and are still excluded from the summary by `_issues_filter`.
 
