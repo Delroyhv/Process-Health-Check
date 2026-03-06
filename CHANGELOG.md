@@ -1,3 +1,11 @@
+## v1.2.69
+- get_partition_details.sh: Emit a dedicated `CRITICAL: Partition count: N node(s) with partition copies/node >= 2000 (max: M)` summary line when any node exceeds the critical partition threshold (>= 2000 copies/node). Similarly emits `DANGER: Partition count: ...` for the danger threshold (>= 1500). These lines surface in the `CRITICAL / ALERT` and `DANGER` sections of the runchk.sh summary output, consistent with the format of other check scripts. The table rows (one per node) remain in the detail section and are still excluded from the summary by `_issues_filter`.
+
+### SHA256
+```
+8d3ce4e03e70fdcaf54b65dfd9d0fc13abc87ba4eae3b7a63e68eb283c69c467  process_health_v1.2.69.tar.xz
+```
+
 ## v1.2.68
 - hcpcs_db: Add `serve` subcommand — JSON-RPC 2.0 MCP stdio server exposing four tools: `list_runs`, `show_run`, `trend_sr`, `record_run`. Refactored `cmdList/Show/Trend/Record` to use `io.Writer` helpers so CLI and MCP paths share the same query logic. Registered in `~/.claude/settings.json` as an MCP server and as a `/hcpcs-db` Claude Code skill.
 - chk_partition_sizes: New Go binary (`chk_partition_sizes/`) that reads `partitionSize` from all `clusterPartitionState_Metadata-Coordination_*.json` files, deduplicates by partition ID, sorts descending, writes a flat tab-separated file, and emits `[WARNING]` if the largest partition ≥ 1.5× the split threshold. Threshold accepts unit suffixes (Gi/G/Mi/M/Ki/K, all binary). Shell wrapper `chk_partition_sizes.sh` dispatches the binary with platform detection and falls back to jq.
