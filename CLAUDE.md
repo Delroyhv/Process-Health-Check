@@ -71,6 +71,12 @@ Both scripts:
 ### Go Components
 
 - **`partition_growth/main.go`** — Analyzes partition growth trends from JSON event data. Pre-compiled binaries in `partition_growth/build/` for linux/darwin × amd64/arm64. No Go files exist at the repo root.
+- **`cluster_forecast/main.go`** — Reads `health_report_partition_details.log` (Count of partitions), `health_report_services*.log` (MDGW instances), and `partition_splits.log` (avg_monthly_growth) to produce a 12-month MDGW node sizing forecast. CLI options: `--dir`, `--threshold-current`, `--threshold-new`, `--mdgw`. Pre-compiled binaries in `cluster_forecast/build/`. Called by `gsc_healthcheck_report.sh` when `--forecast N` is passed. Handles `MDGW instances: N/A` by defaulting to 1 (with warning) or accepting `--mdgw N` override.
+
+To rebuild the `cluster_forecast` Go binary:
+```bash
+cd cluster_forecast && make all
+```
 
 ### Configuration Files
 
@@ -180,6 +186,8 @@ The `-a` flag outputs a `--- 6-Month Average Monthly Growth ---` section:
 - Option parsing uses `while/case` (not `getopts`) to support long options such as `--chart`
 - `--chart <sections>` — comma-separated list of partition growth sections to include in the report: `yearly`, `quarterly`, `monthly`. When absent, no Growth Trends section is rendered. Sections always appear in file order (yearly → quarterly → monthly) regardless of list order. Source file is `partition_splits.log` (not `partition_growth_chart.log`).
 - `_extract_chart_section()` — awk helper that extracts one named `--- Header ---` section from `partition_splits.log`, stopping at the next `--- ` line
+- `--forecast N` — calls `cluster_forecast` binary with `--dir . --threshold-new N`; embeds output after `### Density Details` in both Markdown and HTML/PDF reports. N is the proposed partition size threshold in GB. When absent, no forecast section is rendered. Platform detection (`uname -s -m`) selects the correct pre-compiled binary from `cluster_forecast/build/`.
+- `_run_forecast()` — helper that detects OS/arch, locates binary, and calls it; returns empty string (skips silently) if binary or `partition_splits.log` is absent
 
 ## gsc_healthcheck.sh Multi-Support-Log Rules
 
