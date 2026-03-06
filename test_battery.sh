@@ -16,8 +16,9 @@
 #   4. Summary table
 #
 # Usage:
-#   sudo bash test_battery.sh [SR1 SR2 ...]
-#   # No args = run all SRs under /ci
+#   sudo bash test_battery.sh [-d DIR] [SR1 SR2 ...]
+#   -d DIR   CI data directory (default: /ci if it exists, else /opt/ci)
+#   # No SR args = run all SRs under DIR
 #
 
 set -uo pipefail
@@ -27,10 +28,8 @@ set -uo pipefail
 # ---------------------------------------------------------------------------
 _REPO_DIR="/home/dablake/src/Process-Health-Check"
 _BIN_DIR="/home/dablake/.local/bin"
-_CI_DIR="/ci"
 _TMPDIR="/var/ci/tmp"
 _CUSTOMER_NAMES=("HV" "ACME" "THOR" "ODEN" "LOKI")
-_LOG_FILE="${_CI_DIR}/test_battery_$(date +%Y%m%d_%H%M%S).log"
 
 # Colours
 _C_OK="\033[32m"
@@ -108,9 +107,24 @@ _clean_stale() {
 }
 
 # ---------------------------------------------------------------------------
-# Optional SR filter: pass SR numbers as arguments to limit which SRs are tested
-# e.g.: sudo bash test_battery.sh 05455380 05448336
-declare -a _sr_filter=("$@")
+# Option parsing — -d DIR sets CI data dir; remaining args are SR filters
+# e.g.: sudo bash test_battery.sh -d /opt/ci 05455380 05448336
+# ---------------------------------------------------------------------------
+_CI_DIR=""
+declare -a _sr_filter=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d)      _CI_DIR="$2"; shift 2 ;;
+        -d*)     _CI_DIR="${1#-d}"; shift ;;
+        --dir=*) _CI_DIR="${1#--dir=}"; shift ;;
+        --dir)   _CI_DIR="$2"; shift 2 ;;
+        *)       _sr_filter+=("$1"); shift ;;
+    esac
+done
+if [[ -z "${_CI_DIR}" ]]; then
+    if [[ -d "/ci" ]]; then _CI_DIR="/ci"; else _CI_DIR="/opt/ci"; fi
+fi
+_LOG_FILE="${_CI_DIR}/test_battery_$(date +%Y%m%d_%H%M%S).log"
 
 # ---------------------------------------------------------------------------
 # Main

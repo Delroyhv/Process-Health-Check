@@ -2,9 +2,13 @@
 #
 # test_healthcheck.sh — Automated integration test for gsc_healthcheck.sh
 #
+# Usage:
+#   sudo bash test_healthcheck.sh [-d DIR] [SR1 SR2 ...]
+#   -d DIR   CI data directory (default: /ci if it exists, else /opt/ci)
+#
 # Process:
 #   1. Rsync repo to local bin dir
-#   2. Scan /ci for 8-digit SR directories
+#   2. Scan DIR for 8-digit SR directories
 #   3. Clean up stale timestamped run dirs (2025*/2026*)
 #   4. Find supportLog bundle in each SR dir
 #   5. Run gsc_healthcheck.sh, time each execution
@@ -18,10 +22,8 @@ set -uo pipefail
 # ---------------------------------------------------------------------------
 _REPO_DIR="/home/dablake/src/Process-Health-Check"
 _BIN_DIR="/home/dablake/.local/bin"
-_CI_DIR="/ci"
 _TMPDIR="/var/ci/tmp"
 _CUSTOMER_NAMES=("HV" "ACME" "THOR" "ODEN" "LOKI")
-_LOG_FILE="${_CI_DIR}/test_healthcheck_$(date +%Y%m%d_%H%M%S).log"
 
 # Colours
 _C_OK="\033[32m"
@@ -104,10 +106,24 @@ _clean_stale() {
 }
 
 # ---------------------------------------------------------------------------
-# Main
-# Optional SR filter: pass SR numbers as arguments to limit which SRs are tested
-# e.g.: sudo bash test_healthcheck.sh 05455380 05448336
-declare -a _sr_filter=("$@")
+# Option parsing — -d DIR sets CI data dir; remaining args are SR filters
+# e.g.: sudo bash test_healthcheck.sh -d /opt/ci 05455380 05448336
+# ---------------------------------------------------------------------------
+_CI_DIR=""
+declare -a _sr_filter=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d)      _CI_DIR="$2"; shift 2 ;;
+        -d*)     _CI_DIR="${1#-d}"; shift ;;
+        --dir=*) _CI_DIR="${1#--dir=}"; shift ;;
+        --dir)   _CI_DIR="$2"; shift 2 ;;
+        *)       _sr_filter+=("$1"); shift ;;
+    esac
+done
+if [[ -z "${_CI_DIR}" ]]; then
+    if [[ -d "/ci" ]]; then _CI_DIR="/ci"; else _CI_DIR="/opt/ci"; fi
+fi
+_LOG_FILE="${_CI_DIR}/test_healthcheck_$(date +%Y%m%d_%H%M%S).log"
 
 # ---------------------------------------------------------------------------
 mkdir -p "$(dirname "${_LOG_FILE}")"

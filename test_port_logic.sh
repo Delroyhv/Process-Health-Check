@@ -1,5 +1,21 @@
 #!/usr/bin/env bash
 # test_port_logic.sh - Stress test only the port selection algorithm
+#
+# Usage: bash test_port_logic.sh [-d DIR]
+#   -d DIR   CI data directory (accepted for consistency; not used by this test)
+
+# ---------------------------------------------------------------------------
+# Option parsing
+# ---------------------------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d)      shift 2 ;;
+        -d*)     shift ;;
+        --dir=*) shift ;;
+        --dir)   shift 2 ;;
+        *)       shift ;;
+    esac
+done
 
 # Load the library to get gsc_port_in_use and other helpers
 . /home/dablake/.local/bin/gsc_core.sh
