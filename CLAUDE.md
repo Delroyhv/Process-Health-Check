@@ -26,7 +26,7 @@ cd partition_growth && make all
 
 | Script | Role |
 |--------|------|
-| `gsc_healthcheck.sh` | End-to-end orchestrator: expands support bundle → starts Prometheus → runs `runchk.sh` |
+| `gsc_healthcheck.sh` | End-to-end orchestrator: expands support bundle(s) → starts Prometheus per psnap → runs `runchk.sh`. Handles multiple support log directories via `_run_dir_checks()`. |
 | `runchk.sh` | Sequentially runs all `chk_*.sh` and `print_*.sh` checks, summarizes ERRORs/WARNINGs |
 | `gsc_prometheus.sh` | Extracts a `psnap_*.tar.xz` and runs Prometheus in a Docker/Podman container |
 | `gsc_grafana.sh` | Runs Grafana with provisioned HCP dashboards |
@@ -86,7 +86,7 @@ Both scripts:
 - Important info → console (stderr via `gsc_log_*`); details → log files via `gsc_loga`
 - Summary sections delimited with `++++++++++` separator lines
 - Scripts that need root check with `gsc_require_root`; dependency checks use `gsc_require <cmd>...`
-- Version tracked in `VERSION` file (e.g., `v1.2.52`); update it and its git tag on each release
+- Version tracked in `VERSION` file (e.g., `v1.2.62`); update it and its git tag on each release
 - CI (GitHub Actions) runs `bash -n` and `shellcheck` on every push/PR
 - Do NOT include `Co-Authored-By:` lines in commit messages
 
@@ -122,6 +122,7 @@ Detail lines following a `Found N partitions...` line are redirected to `bad_par
 ### Partition Growth Output Files
 
 - `partition_growth_chart.log` — text-based growth rates from the `partition_growth` binary (`-a` flag); always generated when binary and `partitionSplit.json` are present; includes `avg_monthly_growth: N splits/month`
+- `partition_splits.log` — copy of `partition_growth_chart.log` created by `runchk.sh` immediately after the binary runs; used by `gsc_healthcheck_report.sh` as the source for `--chart` section extraction
 - `partition_growth_plot.log` — ASCII plots from gnuplot when `gnuplot` is detected; contains tool requirements message when gnuplot is absent
 
 **Sequencing rule:** `partition_growth` binary must run **before** `get_partition_details.sh` in `runchk.sh` so that `avg_monthly_growth` is available for the Cluster Expansion Sizing section. The binary no longer requires `_max_partitions > 1500`; it runs whenever `partitionSplit.json` exists.
@@ -155,7 +156,7 @@ The `-a` flag outputs a `--- 6-Month Average Monthly Growth ---` section:
 
 ## Release Process
 
-1. Update `VERSION` file to next version (e.g. `v1.2.59`)
+1. Update `VERSION` file to next version (e.g. `v1.2.63`)
 2. Update `CHANGELOG.md` with entry and SHA256
 3. Run `make bundle` — builds Go binaries, updates README version, creates `process_health_vX.Y.Z.tar.xz`
    - Bundle **excludes**: `test_*.sh`, `test_*.go`, `mock_curl.sh`, `CLAUDE.md`, `.git/`, `*.tar.xz`, `*.sha256`, `*.log`
@@ -176,3 +177,18 @@ The `-a` flag outputs a `--- 6-Month Average Monthly Growth ---` section:
 - `_count_severity()` uses `grep -c` which always outputs a count (including `0`) and exits 1 on no match
 - **Never** add `|| echo 0` after `grep -c` — it produces `0\n0` causing arithmetic errors; use `|| true` instead
 - HTML-escape text **before** adding colour spans in `_colorize_pre()` to prevent entity re-escaping
+- Option parsing uses `while/case` (not `getopts`) to support long options such as `--chart`
+- `--chart <sections>` — comma-separated list of partition growth sections to include in the report: `yearly`, `quarterly`, `monthly`. When absent, no Growth Trends section is rendered. Sections always appear in file order (yearly → quarterly → monthly) regardless of list order. Source file is `partition_splits.log` (not `partition_growth_chart.log`).
+- `_extract_chart_section()` — awk helper that extracts one named `--- Header ---` section from `partition_splits.log`, stopping at the next `--- ` line
+
+## gsc_healthcheck.sh Multi-Support-Log Rules
+
+When `expand_hcpcs_support.sh` extracts more than one support log, multiple `YYYY-MM-DD_HH-MM-SS` directories are created. `gsc_healthcheck.sh` handles this as follows:
+
+- After expansion, **all** timestamp dirs under the SR base directory are collected (not just the most recent)
+- **1 support log** → customer name used as-is; single dir processed as normal
+- **2+ support logs** → each dir gets a unique random 4-digit suffix: `ACME_2341`, `ACME_8076`, etc.
+- The suffix is applied to the customer name passed to `gsc_prometheus.sh` via `-c`, making container names (`gsc_prometheus_ACME_2341_SR_PORT`) globally unique and preventing collisions
+- Each directory is processed in its own subshell via `_run_dir_checks <customer>` so that state (e.g. `_no_metrics`) does not leak between runs
+- Within a single directory, if multiple psnaps exist, the existing per-psnap suffix logic still applies on top: `ACME_2341_5060`, `ACME_2341_3917`
+- Data directories created by `gsc_prometheus.sh` (`<base>/<customer>/<SR>/prom/data`) are also unique as a side effect of the unique customer name
