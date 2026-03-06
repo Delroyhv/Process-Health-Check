@@ -15,9 +15,13 @@ make bundle     # Create release tar.xz (also updates README version)
 make docs       # Generate docs/ (Markdown + PDF) from man pages
 ```
 
-To rebuild the `partition_growth` Go binary:
+To rebuild Go binaries:
 ```bash
-cd partition_growth && make all
+cd partition_growth   && make all
+cd cluster_forecast   && make all
+cd parse_instances    && make all
+cd chk_snodes         && make all
+cd chk_alerts         && make all
 ```
 
 ## Architecture
@@ -70,13 +74,36 @@ Both scripts:
 
 ### Go Components
 
-- **`partition_growth/main.go`** — Analyzes partition growth trends from JSON event data. Pre-compiled binaries in `partition_growth/build/` for linux/darwin × amd64/arm64. No Go files exist at the repo root.
-- **`cluster_forecast/main.go`** — Reads `health_report_partition_details.log` (Count of partitions), `health_report_services*.log` (MDGW instances), and `partition_splits.log` (avg_monthly_growth) to produce a 12-month MDGW node sizing forecast. CLI options: `--dir`, `--threshold-current`, `--threshold-new`, `--mdgw`. Pre-compiled binaries in `cluster_forecast/build/`. Called by `gsc_healthcheck_report.sh` when `--forecast N` is passed. Handles `MDGW instances: N/A` by defaulting to 1 (with warning) or accepting `--mdgw N` override.
+All Go binaries follow the same pattern: `<name>/main.go` + `<name>/Makefile`, cross-compiled for linux/darwin × amd64/arm64 into `<name>/build/`. Shell scripts detect OS/arch via `uname -s -m`, dispatch to the binary, and fall back to jq on failure.
 
-To rebuild the `cluster_forecast` Go binary:
-```bash
-cd cluster_forecast && make all
-```
+| Binary | Directory | Replaces | Shell script caller |
+|--------|-----------|----------|---------------------|
+| `partition_growth` | `partition_growth/` | — (original Go) | `runchk.sh` (direct call) |
+| `cluster_forecast` | `cluster_forecast/` | — (new) | `gsc_healthcheck_report.sh` (`--forecast`) |
+| `parse_instances` | `parse_instances/` | N×M jq subprocess loop | `parse_instances_info.sh` |
+| `chk_snodes` | `chk_snodes/` | grep-on-JSON counting | `chk_snodes.sh` |
+| `chk_alerts` | `chk_alerts/` | `.events[].time` bug + jq | `chk_alerts.sh` |
+
+**`partition_growth/main.go`** — Analyzes partition growth trends from JSON event data. `-a` flag outputs chart + `avg_monthly_growth: N splits/month` line.
+
+**`cluster_forecast/main.go`** — Reads `health_report_partition_details.log`, `health_report_services*.log`, and `partition_splits.log` to produce a 12-month MDGW node sizing forecast. CLI: `--dir`, `--threshold-current`, `--threshold-new`, `--mdgw`. Handles `MDGW instances: N/A` by defaulting to 1 (with warning) or `--mdgw N` override.
+
+**`parse_instances/main.go`** — Parses instances JSON (`foundry_instances.json` / `config_foundry_instances.out`) into the per-node and per-service summary written to `hcpcs_services_info.log`. Preserves insertion-order service registry. Fixes N×M `jq` subprocess overhead for large clusters.
+
+**`chk_snodes/main.go`** — Validates storage component config JSON. Checks `storageType==HCPS_S3`, `https==true`, `port==443`, `maxConnections==1024`. Fixes grep-on-JSON false negatives in the original bash (e.g. `grep "https" | grep -c "true"` matched any field).
+
+**`chk_alerts/main.go`** — Reads alert-list JSON and system-info events JSON; filters to last N days; deduplicates events by subject. CLI: `--dir` (WalkDir with `strings.Contains` for numeric-prefixed filenames), `--alerts`, `--events`, `--output`, `--days`. Fixes two original bash bugs: uses `.timestamp` (not `.time`) for event filtering, and deduplicates by full subject string (not first word).
+
+**Dispatch placement rule for chk_alerts.sh:** Binary dispatch runs **before** the `find | grep -m 1 | head -n 1` file-discovery pipelines. Those pipelines produce SIGPIPE exit 141 under `set -euo pipefail` (from `gsc_core.sh`), killing the script before reaching a later dispatch block. The binary does its own discovery via `--dir`.
+
+### Long-term Go Conversion Plan
+
+**Phase 2 — `hcpcs_alertengine` (future):** Convert `chk_metrics.sh` + `chk_collected_metrics.sh` into a single Go binary `hcpcs_alertengine/` that:
+- Reads `hcpcs_hourly_alerts.json` / `hcpcs_daily_alerts.json` for query definitions
+- Issues Prometheus HTTP queries directly (replaces 50+ curl subprocess calls)
+- Evaluates thresholds and writes formatted `health_report_metrics.log`
+- Validates pre-collected metric files for `chk_collected_metrics.sh` logic
+- Benefits: eliminates SIGPIPE risk, single HTTP connection pool, structured error handling
 
 ### Configuration Files
 

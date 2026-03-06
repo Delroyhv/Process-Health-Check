@@ -148,6 +148,22 @@ find_service() {
 
 ########################## START ###################
 
+# ── Go binary path (platform-detected) ──────────────────────────────────────
+_pi_os=$(uname -s | tr '[:upper:]' '[:lower:]')
+_pi_arch=$(uname -m)
+[[ "${_pi_arch}" == "x86_64" ]]  && _pi_arch="amd64"
+[[ "${_pi_arch}" == "aarch64" ]] && _pi_arch="arm64"
+_pi_bin="${_script_dir}/parse_instances/build/parse_instances-${_pi_os}-${_pi_arch}"
+
+if [[ -x "${_pi_bin}" ]]; then
+    gsc_log_info "Using Go binary: parse_instances"
+    if "${_pi_bin}" --file "${_input_json_file}" --output "${_output_file}" 2>&1; then
+        gsc_log_info "Log file ${_output_file} was generated."
+        exit 0
+    fi
+    gsc_log_warn "Go binary failed — falling back to jq"
+fi
+
 gsc_loga "Parsing ${_input_json_file} file"
 
 # Check if the 1st line is a comment and needs to be removed before processing by jq

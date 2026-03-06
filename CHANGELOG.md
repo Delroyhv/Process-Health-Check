@@ -1,3 +1,14 @@
+## v1.2.65
+- parse_instances: New Go binary (`parse_instances/`) that replaces the N×M jq subprocess loop in `parse_instances_info.sh`. Reads instances JSON (strips leading `#` comment line), outputs per-node and per-service summary to `hcpcs_services_info.log`. Preserves insertion-order service registry. Falls back to jq if binary absent.
+- chk_snodes: New Go binary (`chk_snodes/`) that replaces grep-on-JSON checks in `chk_snodes.sh`. Validates `storageType==HCPS_S3`, `https==true`, `port==443`, `maxConnections==1024` using struct fields — fixes false negatives from the original `grep "https" | grep -c "true"` pattern. Falls back to jq if binary absent.
+- chk_alerts: New Go binary (`chk_alerts/`) that replaces jq+awk alert and event processing in `chk_alerts.sh`. Fixes two bugs in the original bash: events used `.time` (non-existent field, always null → zero events reported) instead of `.timestamp`; event deduplication used `sort -u -k4,4` (first word of subject) instead of full subject string. Uses `filepath.WalkDir`+`strings.Contains` to find numerically-prefixed bundle files. Binary dispatch placed before `find|grep|head` pipelines to avoid SIGPIPE exit 141 under `set -euo pipefail`. Falls back to jq if binary absent.
+- All three binaries compiled for linux/darwin × amd64/arm64 and dispatched from their shell wrappers with platform detection.
+
+### SHA256
+```
+1bd5cefe66c4508e5c69255e34f8b9f931c83e90716e9cc6ac5ef90914d091eb  process_health_v1.2.65.tar.xz
+```
+
 ## v1.2.64
 - cluster_forecast: New Go binary (`cluster_forecast/`) that reads partition counts, MDGW instance count, and avg_monthly_growth from health check logs and produces a 12-month MDGW node sizing forecast. Supports Ideal (≤500 copies/node) and Cautious (≤900 copies/node) targets. Optional `--threshold-new N` models the effect of increasing the partition size threshold (e.g. 1 GB → 16 GB reduces growth rate by 16x). `--mdgw N` overrides the MDGW count when logs report N/A. Compiled for linux/darwin × amd64/arm64.
 - cluster_forecast: Handles `MDGW instances: N/A` gracefully — defaults to 1 with a warning, or accepts `--mdgw N` override.

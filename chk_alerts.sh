@@ -86,6 +86,25 @@ fi
 
 gsc_rotate_log "${_output_file}"
 
+# ── Go binary (runs first; discovers files itself via --dir) ─────────────────
+_ca_os=$(uname -s | tr '[:upper:]' '[:lower:]')
+_ca_arch=$(uname -m)
+[[ "${_ca_arch}" == "x86_64" ]]  && _ca_arch="amd64"
+[[ "${_ca_arch}" == "aarch64" ]] && _ca_arch="arm64"
+_ca_bin="${_script_dir}/chk_alerts/build/chk_alerts-${_ca_os}-${_ca_arch}"
+
+if [[ -x "${_ca_bin}" ]]; then
+    _ca_days=$(printf '%s' "${_time_ago}" | awk '{print $1}')
+    _ca_unit=$(printf '%s' "${_time_ago}" | awk '{print $2}')
+    if [[ "${_ca_unit}" == "days" || "${_ca_unit}" == "day" ]] && [[ "${_ca_days}" =~ ^[0-9]+$ ]]; then
+        gsc_log_info "Using Go binary: chk_alerts"
+        if "${_ca_bin}" --dir "${_log_dir}" --output "${_output_file}" --days "${_ca_days}" 2>&1; then
+            gsc_log_info "Completed Alerts and Events processing. Report file: ${_output_file}."
+            exit 0
+        fi
+        gsc_log_warn "Go binary failed — falling back to jq"
+    fi
+fi
 
 #########################
 # START CHECKING ALERTS AND EVENTS INFO

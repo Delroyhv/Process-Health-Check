@@ -121,6 +121,22 @@ if [[ "${_sc_config_json}" == "" || "$(gsc_is_json "${_sc_config_json}")" == "fa
     exit
 fi
 
+# ── Go binary path (platform-detected) ──────────────────────────────────────
+_cs_os=$(uname -s | tr '[:upper:]' '[:lower:]')
+_cs_arch=$(uname -m)
+[[ "${_cs_arch}" == "x86_64" ]]  && _cs_arch="amd64"
+[[ "${_cs_arch}" == "aarch64" ]] && _cs_arch="arm64"
+_cs_bin="${_script_dir}/chk_snodes/build/chk_snodes-${_cs_os}-${_cs_arch}"
+
+if [[ -x "${_cs_bin}" ]]; then
+    gsc_log_info "Using Go binary: chk_snodes"
+    if "${_cs_bin}" --file "${_sc_config_file}" --output "${_output_file}" 2>&1; then
+        gsc_log_info "Saved results ${_output_file}"
+        exit 0
+    fi
+    gsc_log_warn "Go binary failed — falling back to jq"
+fi
+
 _sc_config_json=$(echo "${_sc_config_json}" | jq .)
 
 ####
