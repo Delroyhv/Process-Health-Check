@@ -1,0 +1,46 @@
+# rsync exclude list for local deploy
+# Used by test_battery.sh and test_healthcheck.sh via --exclude-from
+# Keep in sync with the --exclude flags in Makefile (bundle target)
+
+# VCS and CI
+/.git
+/.github
+/.claude
+
+# Release artifacts
+*.tar.xz
+*.xz
+*.sha256
+
+# CI run dirs and support log archives
+/2026*
+/supportLogs*
+
+# Log files
+*.log
+*.log.*
+
+# macOS resource forks
+._*
+
+# Dev-only scripts and docs
+/test_*.sh
+/test_*.go
+/mock_curl.sh
+/CLAUDE.md
+
+# Go source dirs (binaries ship pre-built in root)
+/hcpcs_db
+
+# Old release artifact dirs
+/archive
+/dist
+
+# Empty stray go mod command dirs
+/cd
+/get
+/go
+/init
+/mod
+/modernc.org
+/tidy

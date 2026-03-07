@@ -60,7 +60,7 @@ _elapsed_fmt() {
 # ---------------------------------------------------------------------------
 _deploy() {
     _info "Deploying ${_REPO_DIR}/ → ${_BIN_DIR}/"
-    if rsync -av --exclude=".git" --exclude="*.tar.xz" --exclude="*.sha256" \
+    if rsync -av --exclude-from="${_REPO_DIR}/rsync_excludes.txt" \
         "${_REPO_DIR}/" "${_BIN_DIR}/" >> "${_LOG_FILE}" 2>&1; then
         _ok "Deploy complete"
     else
