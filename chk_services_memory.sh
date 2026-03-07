@@ -279,14 +279,34 @@ else
 fi
 
 if [[ "${_skip_parse}" == "false" ]]; then
-    gsc_loga "INFO: Running: ${_tools_dir}/parse_services_memory.sh ${_services_memconfig_file} ${_services_parsed_memconfig_file}"
-    "${_tools_dir}/parse_services_memory.sh" "${_services_memconfig_file}" "${_services_parsed_memconfig_file}" > /dev/null
-    if [[ ! -f ${_services_parsed_memconfig_file} ]]; then
-        gsc_loga "ERROR: parse_services_memory.sh FAILED TO GENERATE ${_services_parsed_memconfig_file} file."
+    # Single jq call replaces parse_services_memory.sh subprocess loop.
+    # Extracts name / mem / MAX_HEAP_SIZE for every serviceConfig in one pass;
+    # strips a leading comment line if present (same behaviour as the old script).
+    gsc_log_info "Parsing services JSON: ${_services_memconfig_file}"
+    {
+        if head -n 1 "${_services_memconfig_file}" | grep -q "^#"; then
+            tail -n +2 "${_services_memconfig_file}"
+        else
+            cat "${_services_memconfig_file}"
+        fi
+    } | jq -r '
+        .serviceConfigs[] |
+        select(.name != null) |
+        . as $s |
+        ([$s.config.propertyGroups[].configProperties[]
+            | select(.name=="mem") | .value][0] // null) as $mem |
+        ([$s.config.propertyGroups[].configProperties[]
+            | select(.name=="MAX_HEAP_SIZE") | .value][0] // "") as $heap |
+        select($mem != null and $mem != "") |
+        "\($s.name) \($mem) \($heap)"
+    ' > "${_services_parsed_memconfig_file}" || true
+
+    if [[ ! -f "${_services_parsed_memconfig_file}" ]]; then
+        gsc_loga "ERROR: jq failed to generate ${_services_parsed_memconfig_file}"
         exit 1
     fi
 else
-    _services_parsed_memconfig_file=$(find "${_log_dir}" | grep -m 1 "${_services_parsed_memconfig_file_suffix}")
+    _services_parsed_memconfig_file=$(find "${_log_dir}" -name "*${_services_parsed_memconfig_file_suffix}" 2>/dev/null | head -1)
     gsc_loga "WARNING: skipping parsing. Using previously parsed file: ${_services_parsed_memconfig_file}"
 fi
 
@@ -295,6 +315,16 @@ if [[ "${_is_file_empty}" == "0" ]]; then
     gsc_loga "ERROR: health-check script failed to generate a proper memory config file: ${_services_parsed_memconfig_file}"
     exit 1
 fi
+
+# Load parsed service data into associative arrays for O(1) lookup per service.
+# Eliminates one grep + two awk subprocesses per service in the loop below.
+declare -A _svc_mem=()
+declare -A _svc_heap=()
+while IFS=' ' read -r _svc_n _svc_m _svc_h; do
+    [[ -z "${_svc_n}" ]] && continue
+    _svc_mem["${_svc_n}"]="${_svc_m}"
+    _svc_heap["${_svc_n}"]="${_svc_h:-}"
+done < "${_services_parsed_memconfig_file}"
 
 # Load active/running service names from hcpcs_services_info.log
 load_active_services
@@ -306,26 +336,22 @@ if [[ -z "${_node_mem_gb}" ]]; then
 fi
 
 _total_used_memory=0
-while IFS= read -r _line; do
-    # memcheck.conf line format:
-    # ServiceName  128_min  128_max  256_min  256_max
-    _service=$(echo "${_line}" | awk '{ print $1 }')
+# memcheck.conf line format: ServiceName  128_min  128_max  [256_min  256_max]
+# IFS-split read avoids five echo|awk subprocesses per service line.
+while IFS=' ' read -r _service _raw_128_min _raw_128_max _raw_256_min _raw_256_max _rest; do
+    # Skip blank lines and comment lines in memcheck.conf
+    [[ -z "${_service}" || "${_service}" == \#* ]] && continue
 
     # If service is not running (not in active list), skip it silently
     if ! is_service_active "${_service}"; then
         continue
     fi
 
-    _raw_128_min=$(echo "${_line}" | awk '{ print $2 }')
-    _raw_128_max=$(echo "${_line}" | awk '{ print $3 }')
-    _raw_256_min=$(echo "${_line}" | awk '{ print $4 }')
-    _raw_256_max=$(echo "${_line}" | awk '{ print $5 }')
-
-    # Strip any non-digits from min/max values
-    _mem_128_min=$(echo "${_raw_128_min}" | tr -cd '0-9')
-    _mem_128_max=$(echo "${_raw_128_max}" | tr -cd '0-9')
-    _mem_256_min=$(echo "${_raw_256_min}" | tr -cd '0-9')
-    _mem_256_max=$(echo "${_raw_256_max}" | tr -cd '0-9')
+    # Strip any non-digits from min/max values using bash parameter expansion
+    _mem_128_min="${_raw_128_min//[!0-9]/}"
+    _mem_128_max="${_raw_128_max//[!0-9]/}"
+    _mem_256_min="${_raw_256_min//[!0-9]/}"
+    _mem_256_max="${_raw_256_max//[!0-9]/}"
 
     # Default if fields missing
     [[ -z "${_mem_128_min}" ]] && _mem_128_min=0
@@ -348,19 +374,15 @@ while IFS= read -r _line; do
         _max_mem="${_mem_128_max}"
     fi
 
-    _current_service_line=$(grep "${_service}" "${_services_parsed_memconfig_file}")
-
-    # If service not present in services file (but it is in active list), error
-    if [[ -z "${_current_service_line}" ]]; then
+    # O(1) associative array lookup — no grep or awk subprocess per service
+    if [[ -z "${_svc_mem[${_service}]+x}" ]]; then
         ((_err++)) || true
         gsc_loga "ERROR: ${_service} - NOT FOUND in services memory config file ${_services_parsed_memconfig_file}"
         continue
     fi
 
-    # Column 2: service memory (e.g. 2400m, 4096, 8192M, etc.)
-    _raw_current_memory=$(echo "${_current_service_line}" | awk '{ print $2 }')
-    # Column 3: heap (e.g. 1200m, 4096, etc.)
-    _raw_current_heapsize=$(echo "${_current_service_line}" | awk '{ print $3 }')
+    _raw_current_memory="${_svc_mem[${_service}]}"
+    _raw_current_heapsize="${_svc_heap[${_service}]:-}"
 
     # Convert memory/heap values to integer MB; handles floats like 5000.0 → 5000
     _current_memory=$(awk -v v="${_raw_current_memory}" 'BEGIN{printf "%d\n", int(v+0)}' 2>/dev/null || echo 0)
