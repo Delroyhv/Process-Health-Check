@@ -269,7 +269,7 @@ if [[ "${_forced_node_mem}" != "true" ]]; then
         else
             _node_memory="<128"
             gsc_loga "CRITICAL ERROR: INSUFFICIENT NODE MEMORY: <128 GB (${_mem} kB)"
-            ((_err++))
+            ((_err++)) || true
         fi
 
         gsc_loga "INFO: Node total memory: ${_node_memory}"
@@ -352,7 +352,7 @@ while IFS= read -r _line; do
 
     # If service not present in services file (but it is in active list), error
     if [[ -z "${_current_service_line}" ]]; then
-        ((_err++))
+        ((_err++)) || true
         gsc_loga "ERROR: ${_service} - NOT FOUND in services memory config file ${_services_parsed_memconfig_file}"
         continue
     fi
@@ -362,16 +362,16 @@ while IFS= read -r _line; do
     # Column 3: heap (e.g. 1200m, 4096, etc.)
     _raw_current_heapsize=$(echo "${_current_service_line}" | awk '{ print $3 }')
 
-    # Strip all non-digits from memory/heap values
-    _current_memory=$(echo "${_raw_current_memory}" | tr -cd '0-9')
-    _current_heapsize=$(echo "${_raw_current_heapsize}" | tr -cd '0-9')
+    # Convert memory/heap values to integer MB; handles floats like 5000.0 → 5000
+    _current_memory=$(awk -v v="${_raw_current_memory}" 'BEGIN{printf "%d\n", int(v+0)}' 2>/dev/null || echo 0)
+    _current_heapsize=$(awk -v v="${_raw_current_heapsize}" 'BEGIN{printf "%d\n", int(v+0)}' 2>/dev/null || echo 0)
 
     # Default to 0 if something came out empty
     [[ -z "${_current_memory}" ]] && _current_memory=0
     # heap may legitimately be empty for non-heap services
 
     # HEAP CHECK: heap should be approximately 1/2 of service memory when defined
-    _current_heapsize_int=$(echo "${_current_heapsize}" | tr -cd '0-9')
+    _current_heapsize_int=$(awk -v v="${_current_heapsize}" 'BEGIN{printf "%d\n", int(v+0)}' 2>/dev/null || echo 0)
 
     if [[ -n "${_current_heapsize_int}" && "${_current_heapsize_int}" != "0" ]]; then
         _expected_heap=$(( _current_memory / 2 ))
@@ -381,24 +381,24 @@ while IFS= read -r _line; do
         _upper_bound=$(( _expected_heap * 11 / 10 ))
 
         if (( _current_heapsize_int < _lower_bound || _current_heapsize_int > _upper_bound )); then
-            ((_err++))
-            ((_heap_mismatch_count++))
+            ((_err++)) || true
+            ((_heap_mismatch_count++)) || true
             gsc_loga "ERROR: ${_service} - HEAP SIZE MISMATCH: heap=${_current_heapsize_int} MB, memory=${_current_memory} MB, expected≈${_expected_heap} MB (½ of memory)"
         else
-            ((_heap_ok_count++))
+            ((_heap_ok_count++)) || true
         fi
     else
-        ((_heap_skipped_count++))
+        ((_heap_skipped_count++)) || true
     fi
 
-    ((_total_used_memory+=_current_memory))
+    ((_total_used_memory+=_current_memory)) || true
 
     # Compare against selected min/max
     if (( _current_memory < _min_mem )); then
-        ((_err++))
+        ((_err++)) || true
         gsc_loga "ERROR: ${_service} - INCREASE MEMORY SETTING: should be ${_min_mem} (current: ${_current_memory})"
     elif (( _current_memory > _max_mem )) ; then
-        ((_err++))
+        ((_err++)) || true
         if (( _current_memory > _max_mem * 2 )); then
             gsc_loga "ERROR: ${_service} - UNNECESSARY LARGE MEMORY SETTING: ${_current_memory}, should be between ${_min_mem} and ${_max_mem}"
         else
@@ -418,7 +418,7 @@ _node_mem_text=$(echo "${_node_memory}" | tr -cd '0-9')
 # Available memory for services after reserving _other_memory GB
 ((_available_memory=(_node_mem_text-_other_memory)*1024))
 if (( _total_used_memory > _available_memory )); then
-    ((_err++))
+    ((_err++)) || true
     gsc_loga "CRITICAL ERROR: INSUFFICIENT NODE MEMORY - TOTAL USED BY SERVICES: ${_total_used_memory} MB"
 fi
 
