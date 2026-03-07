@@ -273,6 +273,12 @@ if [[ "${_forced_node_mem}" != "true" ]]; then
         fi
 
         gsc_loga "INFO: Node total memory: ${_node_memory}"
+
+        # Warn if physical memory is not one of the two tested production sizes.
+        # "<128" already emits CRITICAL ERROR above, so exclude it here.
+        if [[ "${_node_memory}" != "128" && "${_node_memory}" != "256" && "${_node_memory}" != "<128" ]]; then
+            gsc_loga "WARNING: Node memory (${_node_memory} GB) is not a tested production configuration. Tested production memory is 128 GB or 256 GB."
+        fi
     fi
 else
     gsc_loga "WARNING: using input node memory size: ${_node_memory}"
@@ -437,18 +443,13 @@ done < "${_mem_config_required_file}"
 _node_mem_text=$(echo "${_node_memory}" | tr -cd '0-9')
 [[ -z "${_node_mem_text}" ]] && _node_mem_text=0
 
-# Available memory for services after reserving _other_memory GB
+# CRITICAL check: services must leave _other_memory GB free for OS/Docker/Foundry.
+# _available_memory = (node_GB - 30) * 1024 MB
 ((_available_memory=(_node_mem_text-_other_memory)*1024))
 if (( _total_used_memory > _available_memory )); then
     ((_err++)) || true
-    gsc_loga "CRITICAL ERROR: INSUFFICIENT NODE MEMORY - TOTAL USED BY SERVICES: ${_total_used_memory} MB"
-fi
-
-# Baseline Tested Configuration Check: 256GB node - 30GB OS = 226GB (231424 MB)
-_tested_limit_mb=$(( (256 - _other_memory) * 1024 ))
-if (( _total_used_memory > _tested_limit_mb )); then
-    gsc_loga "WARNING: Total service memory (${_total_used_memory} MB) exceeds the tested CS configuration limit (${_tested_limit_mb} MB)."
-    gsc_log_action "Please open an ASPSUS JIRA to review and approve this high-memory configuration."
+    gsc_loga "CRITICAL: Service memory over allocation: ${_total_used_memory} MB used, ${_available_memory} MB available (${_node_mem_text} GB node, ${_other_memory} GB reserved for OS/Docker/Foundry)"
+    gsc_log_action "Reduce service memory allocations or expand cluster nodes."
 fi
 
 # --- Summary: services vs OS memory ---
