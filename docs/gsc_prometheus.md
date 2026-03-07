@@ -27,7 +27,7 @@ When the container starts successfully the selected port is printed:
 >     [ OK  ] Prometheus for CUSTOMER/SR started on port PORT.
 
 If a *healthcheck.conf* file is found in the same directory as the
-snapshot file, **_prom_port** is automatically updated to the selected
+snapshot file, **\_prom_port** is automatically updated to the selected
 port. If no *healthcheck.conf* is present, note the port and supply it
 to **expand_hcpcs_support.sh --healthcheck-only -u -p *PORT*** before
 running **runchk.sh**. See **hcpcs-health-check**(7).
@@ -149,15 +149,15 @@ from the next port rather than 9090.
 ## Basic invocation (Step 3 of workflow)
 
     sudo gsc_prometheus.sh \
-        -s 17762026 \
-        -c ACME \
+        -s 05304447 \
+        -c AcmeCorp \
         -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances
 
 ## Force Podman and a specific port range
 
     sudo gsc_prometheus.sh \
-        -s 17762026 -c ACME \
+        -s 05304447 -c AcmeCorp \
         -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances \
         --engine podman --min-port 9150 --max-port 9160
@@ -165,14 +165,14 @@ from the next port rather than 9090.
 ## Check space before extracting a large snapshot
 
     sudo gsc_prometheus.sh \
-        -s 17762026 -c ACME \
+        -s 05304447 -c AcmeCorp \
         -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances --estimate-only
 
 ## Replace an existing container for the same SR
 
     sudo gsc_prometheus.sh \
-        -s 17762026 -c ACME \
+        -s 05304447 -c AcmeCorp \
         -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances --replace
 

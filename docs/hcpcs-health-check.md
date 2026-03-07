@@ -38,13 +38,13 @@ found under the root directory, normalises any *\*Prometheus\*.tar.xz*
 filenames to the *psnap_YYYY-Mon-DD_HH-MM-SS.tar.xz* convention, and
 writes an initial *healthcheck.conf* for each psnap discovered.
 
->     expand_hcpcs_support.sh -r /ci/17762026
+>     expand_hcpcs_support.sh -r /ci/05304447
 
 After this step the directory tree looks similar to:
 
->     /ci/17762026/
->       17762026.supportLogs_2025-11-26_20-48-48_<node>.tar.xz
->       17762026.cluster_triage_2025-11-26_20-48-48.tar.20251126.1320.xz
+>     /ci/05304447/
+>       05304447.supportLogs_2025-11-26_20-48-48_<node>.tar.xz
+>       05304447.cluster_triage_2025-11-26_20-48-48.tar.20251126.1320.xz
 >       2025-11-26_20-48-48/
 >         cluster_triage/
 >         collect_healthcheck_data/
@@ -57,7 +57,7 @@ Move into the timestamped directory that was just created so that
 **gsc_prometheus.sh** and **runchk.sh** can locate the *psnap* and
 *healthcheck.conf* files by relative path.
 
->     cd /ci/17762026/2025-11-26_20-48-48
+>     cd /ci/05304447/2025-11-26_20-48-48
 
 ## Step 3 — Start the Prometheus container
 
@@ -71,14 +71,14 @@ containers and reserved exporter ports (9093, 9100, 8080, 9115, 9116,
 The selected port is printed at the end of the run:
 
 >     sudo gsc_prometheus.sh \
->         -s 17762026 \
->         -c ACME \
+>         -s 05304447 \
+>         -c AcmeCorp \
 >         -f psnap_2026-Jul-04_12-53-12.tar.xz \
 >         -b /opt/prom_instances
 
 Sample output (final line):
 
->     [ OK  ] Prometheus for ACME/17762026 started on port 9092.
+>     [ OK  ] Prometheus for AcmeCorp/05304447 started on port 9092.
 
 Note the port number; it is required for Step 4.
 
@@ -108,11 +108,7 @@ at the end.
 By default the three data-intensive checks (disk performance,
 filesystem, journal messages) are skipped. Pass **--full-detail** to
 include them. Pass **--no-metrics** to skip the Prometheus query suite
-when no container is running. If the Prometheus server is configured but
-unreachable, **runchk.sh** will automatically skip **chk_metrics.sh**
-with a `[WARN]` message.
-
-Use **--report** to generate a Markdown summary report:
+when no container is running.
 
 >     # Core checks only
 >     runchk.sh -f ./healthcheck.conf
@@ -122,50 +118,28 @@ Use **--report** to generate a Markdown summary report:
 >
 >     # Core checks, Prometheus not yet started
 >     runchk.sh --no-metrics
->
->     # Generate a Markdown report
->     runchk.sh -f ./healthcheck.conf --report ACME_report.md
-
-## Step 6 — Partition Growth Analysis (automatic)
-
-**partition_growth** analyzes partition trends from *partitionSplit.json*
-found in the expanded support bundle. It is run automatically by
-**runchk.sh** before the partition detail check, producing
-*partition_growth_chart.log* with yearly summaries and a **6-month
-average monthly growth** trend. The projected monthly growth rate is
-included in the partition detail output.
-
-To run the analysis manually or visualize with gnuplot (requires
-**gnuplot-nox**):
-
->     # Run analysis manually
->     ./partition_growth/build/partition_growth -f supportLogs/partitionSplit.json -a
->
->     # Generate ASCII line graphs
->     gnuplot partition_growth/plot.gp
 
 # COMPLETE WORKED EXAMPLE
 
     # Step 1 — expand the bundle
-    expand_hcpcs_support.sh -r /ci/17762026
+    expand_hcpcs_support.sh -r /ci/05304447
 
     # Step 2 — enter the expanded directory
-    cd /ci/17762026/2025-11-26_20-48-48
+    cd /ci/05304447/2025-11-26_20-48-48
 
     # Step 3 — start Prometheus (note port in final OK line)
     sudo gsc_prometheus.sh \
-        -s 17762026 \
-        -c ACME \
+        -s 05304447 \
+        -c AcmeCorp \
         -f psnap_2026-Jul-04_12-53-12.tar.xz \
         -b /opt/prom_instances
-    # [ OK  ] Prometheus for ACME/17762026 started on port 9092.
+    # [ OK  ] Prometheus for AcmeCorp/05304447 started on port 9092.
 
     # Step 4 — patch healthcheck.conf with the port
     expand_hcpcs_support.sh --healthcheck-only -u -p 9092
 
-    # Step 5 — run health checks (full detail) and generate a report
-    runchk.sh -f ./healthcheck.conf --full-detail --report ACME_report.md
-    # Partition growth analysis runs automatically inside runchk.sh.
+    # Step 5 — run health checks (full detail)
+    runchk.sh -f ./healthcheck.conf --full-detail
 
 # FILES
 

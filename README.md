@@ -144,6 +144,86 @@ Grafana is accessible at `http://localhost:3000` (or your custom port) (admin/ad
 
 ---
 
+### Air-Gapped Deployment (`gsc_airgap.sh`)
+
+For systems with no outbound internet access, use `gsc_airgap.sh` to bundle images on a connected host, transport them, and start both Prometheus and Grafana on the isolated system.
+
+**Step 1 — Save images on a connected host:**
+
+```bash
+sudo ./gsc_airgap.sh --save-images /mnt/usb/airgap_bundle
+```
+
+This pulls `prom/prometheus:latest` and `grafana/grafana:latest`, saves each to a `.tar` file, and writes an `airgap_manifest.txt` with image digests for verification.
+
+**Step 2 — Transport the bundle** to the air-gapped host (USB, SCP, etc.).
+
+**Step 3 — Load images on the air-gapped host:**
+
+```bash
+sudo ./gsc_airgap.sh --load-images /mnt/usb/airgap_bundle
+```
+
+Idempotent: images already present are skipped without error.
+
+**Step 4 — Start both containers:**
+
+```bash
+sudo ./gsc_airgap.sh --start \
+  -c ACME -s 05304447 \
+  -f /data/psnap_2026-Jul-04.tar.xz \
+  -b /opt/prom_instances \
+  -D /data/GrafanaDashboards_2.6.zip
+```
+
+Prometheus is started first on an auto-selected free port; Grafana is provisioned with that port as its datasource automatically.
+
+**Stop and clean up:**
+
+```bash
+sudo ./gsc_airgap.sh --stop --override=y
+```
+
+| Flag | Description |
+|------|-------------|
+| `--save-images OUTDIR` | Pull and export images to bundle directory (connected host) |
+| `--load-images BUNDLEDIR` | Load image tars from bundle directory (air-gapped host) |
+| `--start` | Extract psnap and start Prometheus + Grafana |
+| `--stop` | Stop and remove managed containers |
+| `-c NAME` | Customer name |
+| `-s SR` | Service request number |
+| `-f PATH` | Prometheus snapshot `.tar.xz` (psnap) |
+| `-b PATH` | Base directory for extracted data |
+| `-D FILE` | Dashboard JSON or archive (repeatable) |
+| `-g PORT` | Grafana port (default: `3000`) |
+| `-i IP:PORT` | Prometheus datasource (default: auto from prom port) |
+| `--admin-password PASSWORD` | Grafana admin password (default: `admin`) |
+| `--prom-tag TAG` | Prometheus image tag (default: `latest`) |
+| `--grafana-tag TAG` | Grafana image tag (default: `latest`) |
+| `--engine auto\|docker\|podman` | Container engine (default: auto) |
+| `--replace` | Remove existing containers with same name before starting |
+| `--keep-container` | Do not use `--rm`; containers persist after stop |
+| `--volume` | Also delete data directories during `--stop` |
+| `--override=y` | Skip confirmation prompts |
+| `--min-port N` | Minimum port for Prometheus (default: `9090`) |
+| `--max-port N` | Maximum port for Prometheus (default: `9599`) |
+| `--exclude-port N` | Additional port to skip (repeatable) |
+| `--debug` | Enable verbose logging |
+| `--no-color` | Disable ANSI colour output |
+| `--version` | Show version |
+| `-h`, `--help` | Show help |
+
+To pin specific image versions for reproducible deployments:
+
+```bash
+sudo ./gsc_airgap.sh --save-images /mnt/usb/bundle \
+  --prom-tag v2.51.0 --grafana-tag 10.4.3
+sudo ./gsc_airgap.sh --load-images /mnt/usb/bundle \
+  --prom-tag v2.51.0 --grafana-tag 10.4.3
+```
+
+---
+
 ## Configuration
 
 ### `healthcheck.conf`

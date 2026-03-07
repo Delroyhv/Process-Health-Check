@@ -1,0 +1,324 @@
+.TH GSC_AIRGAP 1 "2026-03-07" "Process Health v1.2.71" "HCP Cloud Scale Health Check"
+.SH NAME
+gsc_airgap.sh \- load and start Prometheus + Grafana on an air-gapped system
+.SH SYNOPSIS
+.B sudo gsc_airgap.sh
+.B \-\-save\-images
+.I OUTDIR
+.RB [ options ]
+.PP
+.B sudo gsc_airgap.sh
+.B \-\-load\-images
+.I BUNDLEDIR
+.RB [ options ]
+.PP
+.B sudo gsc_airgap.sh
+.B \-\-start
+.B \-c
+.I CUSTOMER
+.B \-s
+.I SR
+.B \-f
+.I PSNAP
+.B \-b
+.I BASEDIR
+.RB [ options ]
+.PP
+.B sudo gsc_airgap.sh
+.B \-\-stop
+.RB [ options ]
+.SH DESCRIPTION
+.B gsc_airgap.sh
+manages the full lifecycle of Prometheus and Grafana containers on systems
+that have no outbound internet access (air-gapped environments).
+.PP
+On a network-connected host use
+.B \-\-save\-images
+to pull both container images and export them to a portable tar bundle
+directory.  Transfer that directory to the air-gapped host (USB, SCP, etc.)
+and use
+.B \-\-load\-images
+to import the images into the local container engine.
+Once loaded, use
+.B \-\-start
+to extract a Prometheus snapshot (psnap), start Prometheus, and start
+Grafana pre-provisioned with the Prometheus datasource.
+.B \-\-stop
+stops and removes both containers.
+.PP
+All volume mounts include the
+.B :z
+SELinux shared-relabel flag so the containers can read their data
+directories on SELinux-enforcing systems (RHEL, AlmaLinux, Fedora).
+The flag is a no-op on non-SELinux hosts.
+.PP
+Port selection for Prometheus is automatic: a random free TCP port is
+chosen from the range
+.B 9090\(en9599
+(configurable with
+.B \-\-min\-port
+and
+.BR \-\-max\-port ),
+skipping reserved exporter ports (9093, 9100, 8080, 9115, 9116, 9104)
+and any ports already mapped by running containers.
+.PP
+If a
+.I healthcheck.conf
+file exists in the same directory as the snapshot file,
+.B _prom_port
+is automatically updated to the selected port after Prometheus starts.
+.SH MODES
+.TP
+.B \-\-save\-images \fIOUTDIR\fR
+Pull
+.I prom/prometheus
+and
+.I grafana/grafana
+images on the current (connected) host and write them to
+.I prometheus_<tag>.tar
+and
+.IR grafana_<tag>.tar
+in
+.IR OUTDIR .
+Also writes
+.I airgap_manifest.txt
+recording image names, filenames, and digests.
+Run this mode on a host with internet access before transporting the
+bundle to the target system.
+.TP
+.B \-\-load\-images \fIBUNDLEDIR\fR
+Read
+.I BUNDLEDIR/airgap_manifest.txt
+and load each image tar into the container engine with
+.B docker load
+/
+.BR "podman load" .
+Idempotent: images that are already present are skipped without error.
+Run this mode on the air-gapped host after the bundle has been transported.
+.TP
+.B \-\-start
+Extract the Prometheus snapshot archive, start a Prometheus container,
+then start a Grafana container pre-provisioned with the Prometheus
+datasource.  Requires
+.BR \-c ,
+.BR \-s ,
+.BR \-f ,
+and
+.BR \-b .
+Both images must already be loaded (see
+.BR \-\-load\-images ).
+Grafana startup is skipped with a warning when its image is absent;
+Prometheus still starts.
+.TP
+.B \-\-stop
+Stop and remove all Prometheus containers matching
+.I gsc_prometheus_*
+and all Grafana containers matching
+.IR gsc_grafana_* .
+Add
+.B \-\-volume
+to also delete the extracted data directories.
+.SH OPTIONS
+.SS Prometheus options (required for \-\-start)
+.TP
+.BR \-c ", " \-\-customer " \fINAME\fR"
+Customer name.  Used to construct the container name and working
+directory path under
+.IR BASEDIR .
+.TP
+.BR \-s ", " \-\-service\-request " \fISR\fR"
+Service request or case number.  Combined with
+.I CUSTOMER
+to form unique container names and directory paths.
+.TP
+.BR \-f ", " \-\-snapshot\-file " \fIPATH\fR"
+Path to the Prometheus snapshot archive
+.RI ( psnap_*.tar.xz ).
+Must be an existing file.
+.TP
+.BR \-b ", " \-\-base\-directory " \fIPATH\fR"
+Base directory under which per-customer working directories are created.
+Created automatically if it does not exist.
+The Prometheus data path is
+.IR BASEDIR/CUSTOMER/SR/prom/data ;
+Grafana provisioning is at
+.IR BASEDIR/CUSTOMER/SR/grafana/ .
+.SS Grafana options (optional for \-\-start)
+.TP
+.BR \-D ", " \-\-dashboard " \fIFILE\fR"
+Dashboard JSON file or archive
+.RI ( .zip ", " .tar.gz ", " .tar.xz ).
+May be repeated to load multiple dashboards.
+When omitted, Grafana starts with an empty dashboard folder.
+.TP
+.BR \-g ", " \-\-grafana\-port " \fIPORT\fR"
+Port to expose Grafana on the host.
+Default:
+.I 3000
+.TP
+.BR \-i ", " \-\-datasource " \fIIP:PORT\fR"
+Prometheus datasource address.
+Default: automatically derived from the port selected for Prometheus
+.RI ( http://localhost:PORT ).
+.TP
+.B \-\-admin\-password " \fIPASSWORD\fR"
+Grafana admin account password.
+Default:
+.I admin
+.SS Image options
+.TP
+.B \-\-prom\-tag " \fITAG\fR"
+Prometheus image tag to pull or load.
+Default:
+.I latest
+.TP
+.B \-\-grafana\-tag " \fITAG\fR"
+Grafana image tag to pull or load.
+Default:
+.I latest
+.TP
+.B \-\-prom\-image " \fIIMAGE\fR"
+Prometheus image name.
+Default:
+.I docker.io/prom/prometheus
+.TP
+.B \-\-grafana\-image " \fIIMAGE\fR"
+Grafana image name.
+Default:
+.I docker.io/grafana/grafana
+.SS Container options
+.TP
+.B \-\-engine " auto|docker|podman"
+Force a specific container engine.
+Default:
+.B auto
+(prefers podman if both are present, as detected by
+.BR gsc_detect_engine ).
+.TP
+.B \-\-replace
+Remove any existing container with the same name before starting.
+.TP
+.B \-\-keep\-container
+Start containers without
+.BR \-\-rm ;
+they persist after they stop.
+.TP
+.B \-\-min\-port " \fIN\fR"
+Lowest port number for Prometheus auto-selection.
+Default:
+.I 9090
+.TP
+.B \-\-max\-port " \fIN\fR"
+Highest port number for Prometheus auto-selection.
+Default:
+.I 9599
+.TP
+.B \-\-exclude\-port " \fIN\fR"
+Exclude an additional port from selection.  May be repeated.
+.SS Cleanup options (for \-\-stop)
+.TP
+.B \-\-volume
+Also delete data directories associated with stopped containers.
+.TP
+.B \-\-override=y
+Skip confirmation prompts during cleanup.
+.SS Other options
+.TP
+.B \-\-debug
+Enable verbose diagnostic output.
+.TP
+.B \-\-no\-color
+Disable ANSI colour output.
+.TP
+.B \-\-version
+Print the script version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary and exit.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+A required argument was missing, a file was not found, an image was not
+loaded, no free port was available, or a container failed to start.
+.SH ENVIRONMENT
+.TP
+.B GSC_LIB_PATH
+Override the path to
+.I gsc_core.sh
+(default: same directory as the script).
+.SH FILES
+.TP
+.I BUNDLEDIR/airgap_manifest.txt
+Written by
+.B \-\-save\-images
+and read by
+.BR \-\-load\-images .
+Records image references, tar filenames, and digests.
+.TP
+.I BUNDLEDIR/prometheus_<tag>.tar
+Exported Prometheus image tar.
+.TP
+.I BUNDLEDIR/grafana_<tag>.tar
+Exported Grafana image tar.
+.TP
+.I BASEDIR/CUSTOMER/SR/prom/data/
+Extracted Prometheus snapshot data.  Mounted as
+.I /prometheus
+in the Prometheus container.
+.TP
+.I BASEDIR/CUSTOMER/SR/prom/prometheus.yml
+Minimal Prometheus configuration written by
+.BR \-\-start .
+.TP
+.I BASEDIR/CUSTOMER/SR/grafana/dashboards/
+Dashboard JSON files copied/extracted from
+.B \-D
+arguments.
+.TP
+.I BASEDIR/CUSTOMER/SR/grafana/provisioning/
+Grafana provisioning YAML for datasource and dashboard provider.
+.SH EXAMPLES
+.SS Export images on a connected host
+.EX
+sudo gsc_airgap.sh --save-images /mnt/usb/airgap_bundle
+.EE
+.SS Transport and load on the air-gapped host
+.EX
+# Copy /mnt/usb/airgap_bundle to the target, then:
+sudo gsc_airgap.sh --load-images /mnt/usb/airgap_bundle
+.EE
+.SS Start both containers with dashboards
+.EX
+sudo gsc_airgap.sh --start \e
+    -c ACME -s 05304447 \e
+    -f /data/psnap_2026-Jul-04.tar.xz \e
+    -b /opt/prom_instances \e
+    -D /data/GrafanaDashboards_2.6.zip
+.EE
+.SS Start with a pinned image version
+.EX
+sudo gsc_airgap.sh --save-images /mnt/usb/bundle \e
+    --prom-tag v2.51.0 --grafana-tag 10.4.3
+sudo gsc_airgap.sh --load-images /mnt/usb/bundle \e
+    --prom-tag v2.51.0 --grafana-tag 10.4.3
+sudo gsc_airgap.sh --start \e
+    -c ACME -s 05304447 \e
+    -f psnap_2026-Jul-04.tar.xz -b /opt/prom \e
+    --prom-tag v2.51.0 --grafana-tag 10.4.3
+.EE
+.SS Stop and remove all managed containers
+.EX
+sudo gsc_airgap.sh --stop --override=y
+.EE
+.SH SEE ALSO
+.BR gsc_prometheus (1),
+.BR expand_hcpcs_support (1),
+.BR runchk (1),
+.BR hcpcs\-health\-check (7),
+.BR docker (1),
+.BR podman (1)
+.SH AUTHORS
+Hitachi Vantara GSC
