@@ -1,3 +1,21 @@
+## v1.2.72
+- chk_services_memory.sh: Add warning when node physical memory is not a tested production configuration (128 GB or 256 GB). Non-standard sizes (192 GB, >300 GB, 512 GB) emit `WARNING: Node memory (X GB) is not a tested production configuration. Tested production memory is 128 GB or 256 GB.` The existing `CRITICAL ERROR` for <128 GB is excluded from this warning.
+- chk_services_memory.sh: Replace vague `CRITICAL ERROR: INSUFFICIENT NODE MEMORY` with a clear `CRITICAL: Service memory over allocation: X MB used, Y MB available (Z GB node, 30 GB reserved for OS/Docker/Foundry)` and an ACTION recommendation. Remove the redundant hardcoded 256 GB baseline check.
+- chk_services_memory.sh: Fix float parsing bug — `tr -cd '0-9'` on values like `5000.0` produced `50000` (decimal stripped, concatenating remaining digits). Replaced with `awk int()` conversion.
+- chk_services_memory.sh: Fix silent `set -e` exits on arithmetic increments — `(( counter++ ))` evaluates to 0 (falsy) when counter starts at 0, killing the script under `set -euo pipefail`. Added `|| true` to all arithmetic increments.
+- chk_services_memory.sh: Replace per-service `parse_services_memory.sh` subprocess loop with a single `jq` call and associative array lookup, reducing subprocess forks from ~310 to 1 (4× faster: 0.85 s → 0.21 s).
+- chk_cluster.sh: Use `_CS_MIN_VERSION` sourced from `cs_version.conf` instead of a hardcoded version string. Remove duplicate version check.
+- cs_version.conf: Update minimum HCP-CS version from `2.1.65` to `2.6.1.65`.
+- get_partition_details.sh: Fix leadership imbalance prefix from `WARNING:` to `[WARNING]` so the line surfaces correctly in the runchk.sh summary grep.
+- Makefile: Expand bundle `--exclude` list to cover `hcpcs_db/` source dir, empty stray `go mod` dirs (`cd`, `get`, `go`, `init`, `mod`, `modernc.org`, `tidy`), old release artifact dirs (`archive`, `dist`), and `.claude/`. Reformat excludes one-per-line for readability.
+- rsync_excludes.txt: New file — single source of truth for rsync `--exclude-from`, mirroring the Makefile bundle excludes. Used by test deploy scripts.
+- test_battery.sh, test_healthcheck.sh: Replace inline `--exclude` flags with `--exclude-from="${_REPO_DIR}/rsync_excludes.txt"`.
+
+### SHA256
+```
+3c0884f0f2506d52e17f0776b6db24d27adba56e459ef74c3de5df6050c464bf  process_health_v1.2.72.tar.xz
+```
+
 ## v1.2.71
 - gsc_airgap.sh: New script for air-gapped Prometheus + Grafana deployment. Supports four modes: `--save-images OUTDIR` (pull and export image tars + airgap_manifest.txt on a connected host), `--load-images BUNDLEDIR` (idempotent image load on the air-gapped host), `--start` (extract psnap, auto-select port, start Prometheus then Grafana with auto-provisioned datasource), `--stop` (stop and remove managed containers). Follows all project conventions: gsc_core.sh shared functions (gsc_detect_engine, gsc_collect_container_ports, gsc_port_in_use, gsc_container_cleanup, gsc_sanitize_name, gsc_log_*), :z SELinux volume labels, _rm_args/@-expansion pattern for set -u safety, healthcheck.conf auto-patch. Grafana startup is optional: proceeds with warning when its image is absent. Image tags configurable via --prom-tag / --grafana-tag.
 - man/man1/gsc_airgap.1: New man page (same format as gsc_prometheus.1).
