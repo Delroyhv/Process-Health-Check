@@ -206,7 +206,7 @@ in_s1 {
                     diff = leaders[i] - avg
                     if (diff < 0) diff = -diff
                     if (diff > (0.1 * avg)) {
-                        printf "WARNING: Node %s leadership imbalance (%d) deviates >10%% from avg %.1f — indicates Metadata Coordination Service (MDCO) may not be working correctly\n", nodes[i], leaders[i], avg
+                        printf "[WARNING] Node %s leadership imbalance (%d) deviates >10%% from avg %.1f — indicates Metadata Coordination Service (MDCO) may not be working correctly\n", nodes[i], leaders[i], avg
                     }
                 }
             }
