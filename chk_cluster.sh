@@ -40,8 +40,6 @@ _ver_gte() {
     return 0
 }
 
-_latest_version="2.6.1.68"
-
 _product_version_short="product.version"
 _cluster_info_short="_productinfo_cluster.config"
 _system_info_short="_get-config_aspen_system-info.out"
@@ -60,10 +58,7 @@ else
     else
         gsc_log_info "Cloud Scale Version: ${_version_num}" # Explicitly print for easy parsing
         if ! _ver_gte "${_version_num}" "${_CS_MIN_VERSION}"; then
-            gsc_loga "WARNING: HCP-CS version ${_version_num} is below minimum supported version ${_CS_MIN_VERSION} — upgrade required"
-        fi
-        if [[ "${_version_num}" != "${_latest_version}" ]]; then
-            gsc_loga "WARNING: product version ${_version_num} is not the latest (${_latest_version})"
+            gsc_loga "WARNING: product version ${_version_num} is not the latest (${_CS_MIN_VERSION})"
         fi
     fi
 fi
