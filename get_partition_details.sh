@@ -327,4 +327,30 @@ END {
 ' "${_out_file}")
 
 echo "${_results}"
+
+# ── Top 10 largest partitions ─────────────────────────────────────────────────
+_size_log="${_search_base}/partition_size_analysis.log"
+[[ ! -f "${_size_log}" ]] && _size_log="partition_size_analysis.log"
+
+if [[ -f "${_size_log}" ]]; then
+    _top10=$(awk -F'\t' '
+        /^#/ { next }
+        ++n <= 10 {
+            sz = $2 + 0
+            if      (sz < 1024)       human = sprintf("%d B",    sz)
+            else if (sz < 1048576)    human = sprintf("%.1f KB",  sz / 1024)
+            else if (sz < 1073741824) human = sprintf("%.1f MB",  sz / 1048576)
+            else                      human = sprintf("%.2f GB",  sz / 1073741824)
+            printf "  %2d.  %-20s  %s\n", n, $1, human
+        }
+    ' "${_size_log}")
+
+    if [[ -n "${_top10}" ]]; then
+        printf '\n[INFO   ] Top 10 Largest Partitions (by size):\n'
+        printf '  Rank  Partition ID          Size\n'
+        printf '  ----  --------------------  ----------\n'
+        printf '%s\n' "${_top10}"
+    fi
+fi
+
 check_service_placement
