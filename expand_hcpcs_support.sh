@@ -302,9 +302,9 @@ _extract_support_log() {
     gsc_log_info "Extracting Support Log: ${_file} -> ${_extract_dir}"
 
     if [ "${_have_pv}" -eq 1 ]; then
-        pv "${_file}" | xz -d -9 | tar -x -f - -C "${_extract_dir}"
+        pv "${_file}" | xz -d -T0 | tar -x -f - -C "${_extract_dir}"
     else
-        xz -d -9 -c "${_file}" | tar -x -f - -C "${_extract_dir}"
+        xz -d -T0 -c "${_file}" | tar -x -f - -C "${_extract_dir}"
     fi
 
     gsc_log_info "Support Log extracted: ${_extract_dir}"

@@ -111,6 +111,53 @@ gsc_find_file() {
   find "${_dir}" -type f -name "*${_pat}*" 2>/dev/null | sort -r | head -n 1
 }
 
+gsc_extract_flat() {
+  # Usage: gsc_extract_flat <archive> [target_dir]
+  # Extracts archive into target_dir, stripping one top-level directory if present.
+  local _archive="$1"
+  local _target="${2:-.}"
+
+  if [[ -z "${_archive}" ]]; then
+    gsc_log_error "gsc_extract_flat: archive argument is required"
+    return 1
+  fi
+
+  if [[ ! -f "${_archive}" ]]; then
+    gsc_log_error "gsc_extract_flat: archive not found: ${_archive}"
+    return 1
+  fi
+
+  mkdir -p "${_target}"
+
+  case "${_archive}" in
+    *.zip)
+      gsc_require unzip
+      local _tmp
+      _tmp=$(mktemp -d)             # staging dir; registered for safe cleanup on exit
+      gsc_add_tmp_dir "${_tmp}"
+      unzip -q "${_archive}" -d "${_tmp}"
+      local -a _top_entries=()
+      mapfile -t _top_entries < <(find "${_tmp}" -mindepth 1 -maxdepth 1)  # array-safe for names with spaces
+      if [[ ${#_top_entries[@]} -eq 1 && -d "${_top_entries[0]}" ]]; then
+        mv "${_top_entries[0]}"/.[!.]* "${_target}/" 2>/dev/null || true    # dotfiles first; suppress if none
+        mv "${_top_entries[0]}"/* "${_target}/"                             # visible files
+      else
+        mv "${_tmp}"/* "${_target}/"  # multiple top-level entries; move all
+      fi
+      ;;
+    *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2|*.tar)
+      gsc_require tar
+      XZ_OPT="-T0" tar -xf "${_archive}" --strip-components=1 -C "${_target}"  # strip top-level; XZ_OPT enables multi-thread when blocks present
+      ;;
+    *)
+      gsc_log_error "gsc_extract_flat: unsupported archive format: ${_archive}"
+      return 1
+      ;;
+  esac
+
+  gsc_log_info "Extracted ${_archive} -> ${_target}"
+}
+
 # -----------------------------
 # JSON helpers
 # -----------------------------

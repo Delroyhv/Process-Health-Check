@@ -1,3 +1,15 @@
+## v1.2.73
+- gsc_core.sh: Add `gsc_extract_flat()` — shared archive extraction helper (zip + tar.gz/xz/bz2). Strips one top-level directory when present (zip via temp-dir inspect+mv; tar via `--strip-components=1`). Registers temp dir with `gsc_add_tmp_dir` for safe cleanup. Uses `XZ_OPT="-T0"` to enable multi-threaded xz decompression when archive has multiple blocks.
+- expand_hcpcs_support.sh: Fix `xz -d -9` → `xz -d -T0`. The `-9` compression-level flag is silently ignored during decompression; `-T0` enables multi-threaded decompression (parallelism realized when source archive has multiple xz blocks).
+- test_battery.sh: Integrate `HCPCS_DB` / `HCPCS_CUSTOMER` env vars into runchk.sh Step D calls to record results in hcpcs_db. Fix Step E to call `gsc_healthcheck_report.sh` directly instead of re-running all 20+ check scripts via `runchk.sh --report`. Fix `_HCPCS_DB` default path to use `${HOME}` instead of hardcoded user path.
+- test_concurrency.go: Add `context.WithTimeout` (10 min per goroutine) so hung Prometheus calls are cancelled automatically. Add error checking on setup/cleanup commands. Remove stale sed-based seeding workaround (fix is now in gsc_prometheus.sh source).
+- CLAUDE.md: Add coding conventions (variable naming, inline comments, modularity), Version Bump Rules section, and clarify Release Process step 1.
+
+### SHA256
+```
+3735a04709013c53a19c9430760bcfcbdb02fe0d31175519d0eaf43605904fd0  process_health_v1.2.73.tar.xz
+```
+
 ## v1.2.72
 - chk_services_memory.sh: Add warning when node physical memory is not a tested production configuration (128 GB or 256 GB). Non-standard sizes (192 GB, >300 GB, 512 GB) emit `WARNING: Node memory (X GB) is not a tested production configuration. Tested production memory is 128 GB or 256 GB.` The existing `CRITICAL ERROR` for <128 GB is excluded from this warning.
 - chk_services_memory.sh: Replace vague `CRITICAL ERROR: INSUFFICIENT NODE MEMORY` with a clear `CRITICAL: Service memory over allocation: X MB used, Y MB available (Z GB node, 30 GB reserved for OS/Docker/Foundry)` and an ACTION recommendation. Remove the redundant hardcoded 256 GB baseline check.

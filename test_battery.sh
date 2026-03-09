@@ -30,6 +30,7 @@ _REPO_DIR="/home/dablake/src/Process-Health-Check"
 _BIN_DIR="/home/dablake/.local/bin"
 _TMPDIR="/var/ci/tmp"
 _CUSTOMER_NAMES=("HV" "ACME" "THOR" "ODEN" "LOKI")
+_HCPCS_DB="${HCPCS_DB:-${HOME}/.local/share/hcpcs/results.db}"
 
 # Colours
 _C_OK="\033[32m"
@@ -239,30 +240,28 @@ for _sr_path in "${_CI_DIR}"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]; do
             sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/gsc_prometheus.sh" \
                 -f "${_psnap}" -c "${_customer}" -s "${_sr}" -b . || true
 
-            # Step D: runchk with metrics
+            # Step D: runchk with metrics — record results in hcpcs_db
             printf '[INFO] Step D: Running runchk.sh -f healthcheck.conf\n'
-            sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/runchk.sh" \
-                -f healthcheck.conf || true
+            sudo TMPDIR="${_TMPDIR}" HCPCS_DB="${_HCPCS_DB}" HCPCS_CUSTOMER="${_customer}" \
+                "${_BIN_DIR}/runchk.sh" -f healthcheck.conf || true
 
-            # Step E: runchk with report
-            printf '[INFO] Step E: Running runchk.sh --report %s_report.md\n' "${_customer}"
-            sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/runchk.sh" \
-                -f healthcheck.conf \
-                --report "${_customer}_report.md" || true
+            # Step E: generate report from Step D logs — skip re-running all checks
+            printf '[INFO] Step E: Generating report %s_report.md\n' "${_customer}"
+            sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/gsc_healthcheck_report.sh" \
+                -d . -o "${_customer}_report.md" || true
         else
             # Step C: No psnap — use --no-metrics
             printf '[WARN] Step C: No psnap found — using --no-metrics\n'
 
-            # Step D: runchk --no-metrics
+            # Step D: runchk --no-metrics — record results in hcpcs_db
             printf '[INFO] Step D: Running runchk.sh --no-metrics -f healthcheck.conf\n'
-            sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/runchk.sh" \
-                --no-metrics -f healthcheck.conf || true
+            sudo TMPDIR="${_TMPDIR}" HCPCS_DB="${_HCPCS_DB}" HCPCS_CUSTOMER="${_customer}" \
+                "${_BIN_DIR}/runchk.sh" --no-metrics -f healthcheck.conf || true
 
-            # Step E: runchk --no-metrics with report
-            printf '[INFO] Step E: Running runchk.sh --no-metrics --report %s_report.md\n' "${_customer}"
-            sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/runchk.sh" \
-                --no-metrics -f healthcheck.conf \
-                --report "${_customer}_report.md" || true
+            # Step E: generate report from Step D logs — skip re-running all checks
+            printf '[INFO] Step E: Generating report %s_report.md\n' "${_customer}"
+            sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/gsc_healthcheck_report.sh" \
+                -d . -o "${_customer}_report.md" || true
         fi
 
         printf '[INFO] Battery steps B–E complete.\n'

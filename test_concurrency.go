@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -29,13 +30,17 @@ func main() {
 
 	fmt.Println("[TEST] Starting randomized concurrency test with real snapshots...")
 	fmt.Println("[TEST] Force syncing latest gsc_prometheus.sh and gsc_core.sh...")
-	exec.Command("sudo", "rsync", "-av", "/home/dablake/src/Process-Health-Check/gsc_prometheus.sh", "/home/dablake/src/Process-Health-Check/gsc_core.sh", "/home/dablake/.local/bin/").Run()
-	
-	// Apply the robust seeding fix to the local binary if not already there
-	exec.Command("sudo", "sed", "-i", "s/RANDOM=\\$.*/[[ \"${_last_used_port}\" =~ ^[0-9]+$ ]] || _last_used_port=9090; RANDOM=$(( _last_used_port + $$ ))/", "/home/dablake/.local/bin/gsc_prometheus.sh").Run()
+	if err := exec.Command("sudo", "rsync", "-av",
+		"/home/dablake/src/Process-Health-Check/gsc_prometheus.sh",
+		"/home/dablake/src/Process-Health-Check/gsc_core.sh",
+		"/home/dablake/.local/bin/").Run(); err != nil {
+		fmt.Printf("[TEST] WARNING: rsync failed: %v\n", err)
+	}
 
 	fmt.Println("[TEST] Initial cleanup...")
-	exec.Command("sudo", "/home/dablake/.local/bin/gsc_prometheus.sh", "--cleanup", "--override=y", "-b", ".").Run()
+	if err := exec.Command("sudo", "/home/dablake/.local/bin/gsc_prometheus.sh", "--cleanup", "--override=y", "-b", ".").Run(); err != nil {
+		fmt.Printf("[TEST] WARNING: initial cleanup failed: %v\n", err)
+	}
 
 	for _, tc := range testCases {
 		wg.Add(1)
@@ -43,12 +48,15 @@ func main() {
 			defer wg.Done()
 			<-startGate
 
-			cmd := exec.Command("sudo", "/home/dablake/.local/bin/gsc_prometheus.sh",
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+
+			cmd := exec.CommandContext(ctx, "sudo", "/home/dablake/.local/bin/gsc_prometheus.sh",
 				"-c", t.Cust,
 				"-s", t.SR,
 				"-f", t.Snap,
 				"-b", ".", "--replace", "--no-space-check")
-			
+
 			cmd.Dir = t.Dir
 
 			output, err := cmd.CombinedOutput()
@@ -81,5 +89,7 @@ func main() {
 	fmt.Print(string(out))
 
 	fmt.Println("\n[TEST] Cleanup...")
-	exec.Command("sudo", "/home/dablake/.local/bin/gsc_prometheus.sh", "--cleanup", "--override=y", "-b", ".").Run()
+	if err := exec.Command("sudo", "/home/dablake/.local/bin/gsc_prometheus.sh", "--cleanup", "--override=y", "-b", ".").Run(); err != nil {
+		fmt.Printf("[TEST] WARNING: final cleanup failed: %v\n", err)
+	}
 }

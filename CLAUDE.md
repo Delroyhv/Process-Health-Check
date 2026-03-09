@@ -149,7 +149,9 @@ Default DB path: `~/.local/share/hcpcs/results.db` (overridden by `HCPCS_DB` env
 - Version tracked in `VERSION` file (e.g., `v1.2.62`); update it and its git tag on each release
 - CI (GitHub Actions) runs `bash -n` and `shellcheck` on every push/PR
 - Do NOT include `Co-Authored-By:` lines in commit messages
-
+- All varibles are lower cases and prefix _
+- Comments on code are inline 
+- all scripts are modular 
 ## Summary Section Rules (runchk.sh)
 
 The final summary aggregates lines from `health_report*.log` files via `grep -hE "ERROR|WARNING|CRITICAL|DANGER|ACTION|ALERT"`. Rules for what appears:
@@ -214,9 +216,17 @@ The `-a` flag outputs a `--- 6-Month Average Monthly Growth ---` section:
 
 **Never** run `chk_metrics.sh` without a successful reachability probe first.
 
+## Version Bump Rules
+
+Format: `vMAJOR.MINOR.PATCH`
+
+- **PATCH bump** (`v1.2.62` → `v1.2.63`) — default for bug fixes, single feature additions, or fewer than 30 functional changes
+- **MINOR bump** (`v1.2.67` → `v1.3.0`) — required when the release includes **more than 1 new feature** or **30+ changes to functionality**; increment MINOR by 1 and reset PATCH to 0
+- **MAJOR bump** — reserved for breaking changes or major architectural overhauls
+
 ## Release Process
 
-1. Update `VERSION` file to next version (e.g. `v1.2.63`)
+1. Determine version bump (see Version Bump Rules above), then update `VERSION` file
 2. Update `CHANGELOG.md` with entry and SHA256
 3. Run `make bundle` — builds Go binaries, updates README version, creates `process_health_vX.Y.Z.tar.xz`
    - Bundle **excludes**: `test_*.sh`, `test_*.go`, `mock_curl.sh`, `CLAUDE.md`, `.git/`, `*.tar.xz`, `*.sha256`, `*.log`
