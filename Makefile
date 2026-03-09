@@ -36,6 +36,8 @@ bundle: readme
 	  --exclude='./test_*.go' \
 	  --exclude='./mock_curl.sh' \
 	  --exclude='./CLAUDE.md' \
+	  --exclude='./collect_metrics.sh' \
+	  --exclude='./chk_collected_metrics.sh' \
 	  --exclude='./hcpcs_db' \
 	  --exclude='./archive' \
 	  --exclude='./dist' \
