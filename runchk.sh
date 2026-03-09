@@ -190,6 +190,9 @@ gsc_log_info "# RUN chk_services_sh.sh"
 gsc_log_info "# RUN chk_snodes.sh"
 "${_script_dir}/chk_snodes.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
 
+gsc_log_info "# RUN chk_dls.sh"
+"${_script_dir}/chk_dls.sh" -d . 2>&1 | tee -a "${_tmp_report_output}" || true
+
 gsc_log_info "# RUN chk_services_memory.sh"
 "${_script_dir}/chk_services_memory.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
 
