@@ -75,20 +75,6 @@ getOptions() {
 
 ############################
 
-# _ver_gte v1 v2 — returns 0 (true) if version string v1 >= v2 (major.minor.patch)
-_ver_gte() {
-    local _i _a _b
-    local -a _v1 _v2
-    IFS='.' read -ra _v1 <<< "$1"
-    IFS='.' read -ra _v2 <<< "$2"
-    for _i in 0 1 2; do
-        _a=${_v1[_i]:-0}
-        _b=${_v2[_i]:-0}
-        (( _a > _b )) && return 0
-        (( _a < _b )) && return 1
-    done
-    return 0
-}
 
 getOptions "$@"
 
@@ -178,7 +164,7 @@ for _file in "${_ver_files[@]}"; do
     _node_issues=0
 
     # Docker minimum version check (from docker_version.conf)
-    if [[ -n "${_docker_ver}" ]] && ! _ver_gte "${_docker_ver}" "${_DOCKER_MIN_VERSION}"; then
+    if [[ -n "${_docker_ver}" ]] && ! gsc_ver_gte "${_docker_ver}" "${_DOCKER_MIN_VERSION}"; then
         ((_node_issues++)); ((_err++))
         gsc_loga "WARNING: ${_node}: Docker ${_docker_ver} is below minimum required version ${_DOCKER_MIN_VERSION} — upgrade required"
     fi

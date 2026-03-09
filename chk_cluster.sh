@@ -25,20 +25,6 @@ gsc_rotate_log "${_output_file}"
 
 ###################################################
 
-# _ver_gte v1 v2 — returns 0 (true) if version string v1 >= v2 (major.minor.patch.build)
-_ver_gte() {
-    local _i _a _b
-    local -a _v1 _v2
-    IFS='.' read -ra _v1 <<< "$1"
-    IFS='.' read -ra _v2 <<< "$2"
-    for _i in 0 1 2 3; do
-        _a=${_v1[_i]:-0}
-        _b=${_v2[_i]:-0}
-        (( _a > _b )) && return 0
-        (( _a < _b )) && return 1
-    done
-    return 0
-}
 
 _product_version_short="product.version"
 _cluster_info_short="_productinfo_cluster.config"
@@ -57,7 +43,7 @@ else
         gsc_loga "WARNING: ${_product_version_file} DOES NOT CONTAIN HCP-CS VERSION NUMBER."
     else
         gsc_log_info "Cloud Scale Version: ${_version_num}" # Explicitly print for easy parsing
-        if ! _ver_gte "${_version_num}" "${_CS_MIN_VERSION}"; then
+        if ! gsc_ver_gte "${_version_num}" "${_CS_MIN_VERSION}"; then
             gsc_loga "WARNING: product version ${_version_num} is not the latest (${_CS_MIN_VERSION})"
         fi
     fi

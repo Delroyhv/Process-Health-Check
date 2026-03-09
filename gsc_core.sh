@@ -111,6 +111,21 @@ gsc_find_file() {
   find "${_dir}" -type f -name "*${_pat}*" 2>/dev/null | sort -r | head -n 1
 }
 
+gsc_ver_gte() {
+  # Returns 0 (true) if version string $1 >= $2 (up to 4-part: major.minor.patch.build)
+  local _i _a _b
+  local -a _v1 _v2
+  IFS='.' read -ra _v1 <<< "$1"
+  IFS='.' read -ra _v2 <<< "$2"
+  for _i in 0 1 2 3; do
+    _a=${_v1[_i]:-0}
+    _b=${_v2[_i]:-0}
+    (( _a > _b )) && return 0
+    (( _a < _b )) && return 1
+  done
+  return 0
+}
+
 gsc_extract_flat() {
   # Usage: gsc_extract_flat <archive> [target_dir]
   # Extracts archive into target_dir, stripping one top-level directory if present.
