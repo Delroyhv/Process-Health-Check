@@ -85,9 +85,6 @@ gsc_log_info "Config: ${_config_file} | full-detail: ${_full_detail} | no-metric
 gsc_log_info "# RUN selfcheck.sh"
 "${_script_dir}/selfcheck.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
 
-gsc_log_info "# RUN print_cluster_identity_summary.sh"
-"${_script_dir}/print_cluster_identity_summary.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
-
 gsc_log_info "# RUN print_node_memory_summary.sh"
 "${_script_dir}/print_node_memory_summary.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
 
@@ -103,6 +100,9 @@ gsc_log_info "# RUN chk_lshw.sh"
 gsc_log_info "# RUN prep_services_instances.sh"
 "${_script_dir}/prep_services_instances.sh" . > health_report_services_instances.log 2>&1 || true
 cat health_report_services_instances.log >> "${_tmp_report_output}"
+
+gsc_log_info "# RUN print_cluster_identity_summary.sh"
+"${_script_dir}/print_cluster_identity_summary.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
 
 gsc_log_info "# RUN chk_service_placement.sh"
 "${_script_dir}/chk_service_placement.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
@@ -265,6 +265,39 @@ if [[ -n "${HCPCS_DB:-}" ]]; then
     fi
 fi
 
+# Cluster identity header for final summary
+_sum_serial=$(find cluster_triage -path "*/cluster_MAPI_infos/cluster.serial" \
+              2>/dev/null | sort | head -n1)
+if [[ -n "${_sum_serial}" && -f "${_sum_serial}" ]]; then
+    _sum_serial=$(tr -d '[:space:]' < "${_sum_serial}")
+    [[ -z "${_sum_serial}" ]] && _sum_serial="N/A"
+else
+    _sum_serial="N/A"
+fi
+_sum_name=$(find cluster_triage -path "*/cluster_MAPI_infos/cluster.name" \
+            2>/dev/null | sort | head -n1)
+if [[ -n "${_sum_name}" && -f "${_sum_name}" ]]; then
+    _sum_name=$(tr -d '[:space:]' < "${_sum_name}")
+    [[ -z "${_sum_name}" ]] && _sum_name="N/A"
+else
+    _sum_name="N/A"
+fi
+_sum_nodes=$(grep -h "Total nodes:" health_report_services*.log 2>/dev/null \
+             | grep -oE "[0-9]+" | head -n1 || echo "N/A")
+_sum_mdgw=$(grep -h "MDGW instances:" health_report_services*.log 2>/dev/null \
+            | grep -oE "[0-9]+" | head -n1 || echo "N/A")
+_sum_s3=$(grep -h "S3GW instances:" health_report_services*.log 2>/dev/null \
+          | grep -oE "[0-9]+" | head -n1 || echo "N/A")
+_sum_dls=$(grep -h "DLS instances:" health_report_services*.log 2>/dev/null \
+           | grep -oE "[0-9]+" | head -n1 || echo "N/A")
+_sum_nodes="${_sum_nodes:-N/A}"; _sum_mdgw="${_sum_mdgw:-N/A}"
+_sum_s3="${_sum_s3:-N/A}"; _sum_dls="${_sum_dls:-N/A}"
+
+gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
+gsc_log_info "Serial Number : ${_sum_serial}"
+gsc_log_info "Cluster Name  : ${_sum_name}"
+gsc_log_info "Total Nodes   : ${_sum_nodes}"
+gsc_log_info "MDGW          : ${_sum_mdgw}  |  S3: ${_sum_s3}  |  DLS: ${_sum_dls}"
 gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
 gsc_log_info "SUMMARY: ${_issues_count} issue(s) found | Elapsed: ${_elapsed}s"
 gsc_log_info "++++++++++++++++++++++++++++++++++++++++"
