@@ -1,3 +1,17 @@
+## v1.3.0
+- chk_dls.sh: New check — surfaces DLS task health from `dls-tasks-check_all.out` and `dls-tasks-count_all_all.out` collected by support bundles. Reports ERROR for ❌ hole detection failures (data integrity risk, contact ASPSUS) and WARNING for FAILED/CANCELED task states. Prints OK for all clean task types. Wired into `runchk.sh` after `chk_snodes.sh`.
+- get_partition_details.sh: Add Top 10 Largest Partitions section. Reads `partition_size_analysis.log` (produced by `chk_partition_sizes`), formats sizes with 4-tier unit display (B / KB / MB / GB), prints ranked table with partition ID and human-readable size.
+- print_cluster_identity_summary.sh: Extend cluster identity banner to include Total Nodes, MDGW, S3GW, and DLS instance counts from `health_report_services*.log`. Moved call in `runchk.sh` to after `prep_services_instances.sh` so counts are available. Treat whitespace-only serial/name as N/A.
+- runchk.sh: Add cluster identity header to final summary output showing Serial Number, Cluster Name, Total Nodes, MDGW, S3, DLS before the issue count line.
+- Consolidation: Remove 14 orphaned scripts no longer called by any entry point: `parse_services_memory.sh`, `psnap_extract.sh`, `get_psnap.sh`, `insert_sizes_1dir.sh`, `cp_all.sh`, `generate_partition_report.sh`, `get_partition_info.sh`, `dls_get_all_logs.sh`, `dls_parse.sh`, `dls_log_parse.sh`, `dls_sort_parse.sh`, `generate_report.sh`, `gen_telemetry_def.sh`, `gen_collection_def.sh`.
+- gsc_core.sh: Add `gsc_ver_gte()` — shared 4-part version comparison (major.minor.patch.build). Remove duplicate local `_ver_gte()` from `chk_cluster.sh` and `chk_docker.sh`.
+- Makefile: Add `collect_metrics.sh` and `chk_collected_metrics.sh` to bundle excludes (Phase 3 Go conversion candidates, kept in repo).
+
+### SHA256
+```
+e2d8f2d623de1311ec59d86ba5c63cf23fe70ce8e171b1705679a3f5f3657644  process_health_v1.3.0.tar.xz
+```
+
 ## v1.2.73
 - gsc_core.sh: Add `gsc_extract_flat()` — shared archive extraction helper (zip + tar.gz/xz/bz2). Strips one top-level directory when present (zip via temp-dir inspect+mv; tar via `--strip-components=1`). Registers temp dir with `gsc_add_tmp_dir` for safe cleanup. Uses `XZ_OPT="-T0"` to enable multi-threaded xz decompression when archive has multiple blocks.
 - expand_hcpcs_support.sh: Fix `xz -d -9` → `xz -d -T0`. The `-9` compression-level flag is silently ignored during decompression; `-T0` enables multi-threaded decompression (parallelism realized when source archive has multiple xz blocks).

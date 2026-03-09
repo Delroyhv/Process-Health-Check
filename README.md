@@ -2,7 +2,7 @@
 
 A health check and monitoring toolkit for **HCP Cloud Scale** (Hitachi Vantara) clusters. Processes support logs and Prometheus snapshots to surface errors, warnings, memory anomalies, and partition issues.
 
-**Current version:** v1.2.73
+**Current version:** v1.3.0
 
 ---
 
