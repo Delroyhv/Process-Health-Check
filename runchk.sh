@@ -167,6 +167,9 @@ fi
 gsc_log_info "# RUN get_partition_details.sh"
 "${_script_dir}/get_partition_details.sh" . 2>&1 | tee health_report_partition_details.log | tee -a "${_tmp_report_output}" || true
 
+gsc_log_info "# RUN chk_split_threshold.sh"
+"${_script_dir}/chk_split_threshold.sh" -d . 2>&1 | tee -a "${_tmp_report_output}" || true
+
 gsc_log_info "# RUN chk_buckets.sh"
 "${_script_dir}/chk_buckets.sh" --bucket-owner 2>&1 | tee -a "${_tmp_report_output}" || true
 

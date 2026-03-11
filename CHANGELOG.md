@@ -1,3 +1,11 @@
+## v1.3.2
+- chk_split_threshold.sh: New check — parses `partition_split_threshold.out` from support bundles. Reports Metadata-Coordination and all Metadata-Gateway node thresholds (Gi → GB label). Validates all nodes share the same threshold (WARNING on mismatch). Emits ACTION when threshold < 16 GB and partition count > 1500. Uses `mapfile+sort` for SIGPIPE-safe file discovery; prefers `collect_healthcheck_data/` files over standalone runs. Wired into `runchk.sh` after `get_partition_details.sh`.
+
+### SHA256
+```
+92b4d50d3531ec88f3e169a842cdba3915365076436523c41d1529f566d82601  process_health_v1.3.2.tar.xz
+```
+
 ## v1.3.1
 - runchk.sh: Fix ordering — move `parse_instances_info.sh` to run before `prep_services_instances.sh` so `hcpcs_services_info.log` exists when service instance counts (MDGW/S3GW/DLS) are read. Previously all three showed N/A.
 - runchk.sh, print_cluster_identity_summary.sh: Fix false S3 count — `grep -oE "[0-9]+"` on `"S3GW instances: N/A"` extracted `3` from the service name `S3GW`. Replaced with `awk '{print $NF}' | grep -E "^[0-9]+$"` to match only a trailing integer.
