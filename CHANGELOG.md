@@ -1,3 +1,13 @@
+## v1.3.1
+- runchk.sh: Fix ordering — move `parse_instances_info.sh` to run before `prep_services_instances.sh` so `hcpcs_services_info.log` exists when service instance counts (MDGW/S3GW/DLS) are read. Previously all three showed N/A.
+- runchk.sh, print_cluster_identity_summary.sh: Fix false S3 count — `grep -oE "[0-9]+"` on `"S3GW instances: N/A"` extracted `3` from the service name `S3GW`. Replaced with `awk '{print $NF}' | grep -E "^[0-9]+$"` to match only a trailing integer.
+- runchk.sh, print_cluster_identity_summary.sh: Show `SN not defined` instead of `N/A` when `cluster.serial` is empty or missing.
+
+### SHA256
+```
+5b32f7fa86ad8cbfeb1ef78ef926f3a8b6eebdb6138d4c606ba7ee291ec83fb6  process_health_v1.3.1.tar.xz
+```
+
 ## v1.3.0
 - chk_dls.sh: New check — surfaces DLS task health from `dls-tasks-check_all.out` and `dls-tasks-count_all_all.out` collected by support bundles. Reports ERROR for ❌ hole detection failures (data integrity risk, contact ASPSUS) and WARNING for FAILED/CANCELED task states. Prints OK for all clean task types. Wired into `runchk.sh` after `chk_snodes.sh`.
 - get_partition_details.sh: Add Top 10 Largest Partitions section. Reads `partition_size_analysis.log` (produced by `chk_partition_sizes`), formats sizes with 4-tier unit display (B / KB / MB / GB), prints ranked table with partition ID and human-readable size.

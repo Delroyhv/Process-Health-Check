@@ -97,6 +97,9 @@ gsc_log_info "# RUN chk_cluster.sh"
 gsc_log_info "# RUN chk_lshw.sh"
 "${_script_dir}/chk_lshw.sh" -d . 2>&1 | tee -a "${_tmp_report_output}" || true
 
+gsc_log_info "# RUN parse_instances_info.sh"
+"${_script_dir}/parse_instances_info.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
+
 gsc_log_info "# RUN prep_services_instances.sh"
 "${_script_dir}/prep_services_instances.sh" . > health_report_services_instances.log 2>&1 || true
 cat health_report_services_instances.log >> "${_tmp_report_output}"
@@ -166,9 +169,6 @@ gsc_log_info "# RUN get_partition_details.sh"
 
 gsc_log_info "# RUN chk_buckets.sh"
 "${_script_dir}/chk_buckets.sh" --bucket-owner 2>&1 | tee -a "${_tmp_report_output}" || true
-
-gsc_log_info "# RUN parse_instances_info.sh"
-"${_script_dir}/parse_instances_info.sh" 2>&1 | tee -a "${_tmp_report_output}" || true
 
 if [[ "${_full_detail}" -eq 1 ]]; then
     gsc_log_info "# RUN chk_disk_perf.sh"
@@ -270,9 +270,9 @@ _sum_serial=$(find cluster_triage -path "*/cluster_MAPI_infos/cluster.serial" \
               2>/dev/null | sort | head -n1)
 if [[ -n "${_sum_serial}" && -f "${_sum_serial}" ]]; then
     _sum_serial=$(tr -d '[:space:]' < "${_sum_serial}")
-    [[ -z "${_sum_serial}" ]] && _sum_serial="N/A"
+    [[ -z "${_sum_serial}" ]] && _sum_serial="SN not defined"
 else
-    _sum_serial="N/A"
+    _sum_serial="SN not defined"
 fi
 _sum_name=$(find cluster_triage -path "*/cluster_MAPI_infos/cluster.name" \
             2>/dev/null | sort | head -n1)
@@ -283,13 +283,13 @@ else
     _sum_name="N/A"
 fi
 _sum_nodes=$(grep -h "Total nodes:" health_report_services*.log 2>/dev/null \
-             | grep -oE "[0-9]+" | head -n1 || echo "N/A")
+             | awk '{print $NF}' | grep -E "^[0-9]+$" | head -n1 || true)
 _sum_mdgw=$(grep -h "MDGW instances:" health_report_services*.log 2>/dev/null \
-            | grep -oE "[0-9]+" | head -n1 || echo "N/A")
+            | awk '{print $NF}' | grep -E "^[0-9]+$" | head -n1 || true)
 _sum_s3=$(grep -h "S3GW instances:" health_report_services*.log 2>/dev/null \
-          | grep -oE "[0-9]+" | head -n1 || echo "N/A")
+          | awk '{print $NF}' | grep -E "^[0-9]+$" | head -n1 || true)
 _sum_dls=$(grep -h "DLS instances:" health_report_services*.log 2>/dev/null \
-           | grep -oE "[0-9]+" | head -n1 || echo "N/A")
+           | awk '{print $NF}' | grep -E "^[0-9]+$" | head -n1 || true)
 _sum_nodes="${_sum_nodes:-N/A}"; _sum_mdgw="${_sum_mdgw:-N/A}"
 _sum_s3="${_sum_s3:-N/A}"; _sum_dls="${_sum_dls:-N/A}"
 

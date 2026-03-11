@@ -22,9 +22,9 @@ print_cluster_identity_summary() {
 
     if [[ -n "${_serial_file:-}" && -s "${_serial_file}" ]]; then
         _serial=$(tr -d '[:space:]' < "${_serial_file}")
-        [[ -z "${_serial}" ]] && _serial="N/A"
+        [[ -z "${_serial}" ]] && _serial="SN not defined"
     else
-        _serial="N/A"
+        _serial="SN not defined"
     fi
 
     if [[ -n "${_name_file:-}" && -s "${_name_file}" ]]; then
@@ -36,13 +36,13 @@ print_cluster_identity_summary() {
 
     # Read service counts from health_report_services*.log if available
     _nodes=$(grep -h "Total nodes:" health_report_services*.log 2>/dev/null \
-             | grep -oE "[0-9]+" | head -n 1 || echo "N/A")
+             | awk '{print $NF}' | grep -E "^[0-9]+$" | head -n 1 || true)
     _mdgw=$(grep -h "MDGW instances:" health_report_services*.log 2>/dev/null \
-            | grep -oE "[0-9]+" | head -n 1 || echo "N/A")
+            | awk '{print $NF}' | grep -E "^[0-9]+$" | head -n 1 || true)
     _s3gw=$(grep -h "S3GW instances:" health_report_services*.log 2>/dev/null \
-            | grep -oE "[0-9]+" | head -n 1 || echo "N/A")
+            | awk '{print $NF}' | grep -E "^[0-9]+$" | head -n 1 || true)
     _dls=$(grep -h "DLS instances:" health_report_services*.log 2>/dev/null \
-           | grep -oE "[0-9]+" | head -n 1 || echo "N/A")
+           | awk '{print $NF}' | grep -E "^[0-9]+$" | head -n 1 || true)
     _nodes="${_nodes:-N/A}"; _mdgw="${_mdgw:-N/A}"; _s3gw="${_s3gw:-N/A}"; _dls="${_dls:-N/A}"
 
     gsc_log_info "========================================"
