@@ -248,7 +248,7 @@ for _sr_path in "${_CI_DIR}"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]; do
             # Step E: generate report from Step D logs — skip re-running all checks
             printf '[INFO] Step E: Generating report %s_report.md\n' "${_customer}"
             sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/gsc_healthcheck_report.sh" \
-                -d . -o "${_customer}_report.md" || true
+                -d . -o "${_customer}_report.md" --chart yearly,quarterly,monthly || true
         else
             # Step C: No psnap — use --no-metrics
             printf '[WARN] Step C: No psnap found — using --no-metrics\n'
@@ -261,7 +261,7 @@ for _sr_path in "${_CI_DIR}"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]; do
             # Step E: generate report from Step D logs — skip re-running all checks
             printf '[INFO] Step E: Generating report %s_report.md\n' "${_customer}"
             sudo TMPDIR="${_TMPDIR}" "${_BIN_DIR}/gsc_healthcheck_report.sh" \
-                -d . -o "${_customer}_report.md" || true
+                -d . -o "${_customer}_report.md" --chart yearly,quarterly,monthly || true
         fi
 
         printf '[INFO] Battery steps B–E complete.\n'

@@ -156,9 +156,7 @@ if [[ -n "${_part_json}" && -f "${_part_json}" && -x "${_pg_bin}" ]]; then
     if [[ -s partition_growth_chart.log ]]; then
         cp partition_growth_chart.log partition_splits.log
         gsc_log_info "Partition growth rates generated: partition_growth_chart.log (full detail: partition_splits.log)"
-        if [[ -z "${_report_file}" ]]; then
-            awk '/--- Quarterly Partition Growth ---/{p=1} /--- Monthly Partition Growth ---/{p=0} p' partition_splits.log
-        fi
+        awk '/--- Quarterly Partition Growth ---/{p=1} /--- Monthly Partition Growth ---/{p=0} p' partition_splits.log
     fi
 else
     gsc_log_warn "partitionSplit.json or partition_growth binary not found; skipping growth rate calculation."

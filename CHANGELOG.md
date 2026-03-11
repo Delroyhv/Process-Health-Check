@@ -1,3 +1,12 @@
+## v1.3.4
+- runchk.sh: Always print quarterly partition growth to screen — removed guard that suppressed it when `--report` was set.
+- test_battery.sh: Add `--chart yearly,quarterly,monthly` to both `gsc_healthcheck_report.sh` calls so Growth Trends section is included in generated reports.
+
+### SHA256
+```
+112cdac768ae440cd9a6ba6f4aed3d2234150dc819853fde4f6a0cbe1e9e456c  process_health_v1.3.4.tar.xz
+```
+
 ## v1.3.3
 - get_partition_details.sh: Colorize all display output following logging conventions. Fix `_use_color` detection to read `_gsc_enable_color` from `gsc_core.sh` (was always 0 due to missing `_gsc__use_color` function). Add ANSI color codes to previously plain messages: leadership `[WARNING]`, END block `CRITICAL:`/`DANGER:`/`[ALERT]`/`[INFO ] Cluster Expansion Sizing`. Replace `echo "Error:..."` with `gsc_die`. Use `gsc_log_info` for Top 10 header.
 
