@@ -35,8 +35,7 @@ if [[ -z "${_out_file}" ]]; then
 fi
 
 if [[ ! -f "${_out_file}" ]]; then
-    echo "Error: Partition details file not found."
-    exit 1
+    gsc_die "Partition details file not found."
 fi
 
 # Define info log path for threshold and growth extraction
@@ -67,11 +66,8 @@ if [[ -z "${_monthly_growth}" || "${_monthly_growth}" == "0" ]]; then
 fi
 _monthly_growth="${_monthly_growth:-0}"
 
-# Check if we should use color (from gsc_core.sh logic)
-_use_color=0
-if command -v _gsc__use_color >/dev/null 2>&1; then
-    if _gsc__use_color; then _use_color=1; fi
-fi
+# Use color when gsc_core.sh has enabled it (default: 1)
+_use_color="${_gsc_enable_color:-0}"
 
 check_service_placement() {
     local _services_log_name="hcpcs_services_info.log"
@@ -206,7 +202,10 @@ in_s1 {
                     diff = leaders[i] - avg
                     if (diff < 0) diff = -diff
                     if (diff > (0.1 * avg)) {
-                        printf "[WARNING] Node %s leadership imbalance (%d) deviates >10%% from avg %.1f — indicates Metadata Coordination Service (MDCO) may not be working correctly\n", nodes[i], leaders[i], avg
+                        if (use_color == 1)
+                            printf "%s[WARNING]%s Node %s leadership imbalance (%d) deviates >10%% from avg %.1f — indicates Metadata Coordination Service (MDCO) may not be working correctly\n", C_WARN, C_RESET, nodes[i], leaders[i], avg
+                        else
+                            printf "[WARNING] Node %s leadership imbalance (%d) deviates >10%% from avg %.1f — indicates Metadata Coordination Service (MDCO) may not be working correctly\n", nodes[i], leaders[i], avg
                     }
                 }
             }
@@ -297,13 +296,22 @@ END {
     if (use_color == 1) { label = C_ACTION label C_RESET }
 
     if (crit_count > 0) {
-        printf "\nCRITICAL: Partition count: %d node(s) with partition copies/node >= %d (max: %d)\n", crit_count, t_c, max_count
+        if (use_color == 1)
+            printf "\n%sCRITICAL:%s Partition count: %d node(s) with partition copies/node >= %d (max: %d)\n", C_CRIT, C_RESET, crit_count, t_c, max_count
+        else
+            printf "\nCRITICAL: Partition count: %d node(s) with partition copies/node >= %d (max: %d)\n", crit_count, t_c, max_count
     } else if (danger_count > 0) {
-        printf "\nDANGER: Partition count: %d node(s) with partition copies/node >= %d (max: %d)\n", danger_count, t_d, max_count
+        if (use_color == 1)
+            printf "\n%sDANGER:%s Partition count: %d node(s) with partition copies/node >= %d (max: %d)\n", C_DANGER, C_RESET, danger_count, t_d, max_count
+        else
+            printf "\nDANGER: Partition count: %d node(s) with partition copies/node >= %d (max: %d)\n", danger_count, t_d, max_count
     }
 
     if (max_count > 1500 && (st_val == "1G" || st_val == "1Gi")) {
-        print "\n[ALERT] High partition count (" max_count ") detected with " st_val " split threshold."
+        if (use_color == 1)
+            printf "\n%s[ALERT]%s High partition count (%d) detected with %s split threshold.\n", C_CRIT, C_RESET, max_count, st_val
+        else
+            print "\n[ALERT] High partition count (" max_count ") detected with " st_val " split threshold."
         print label " Please open an ASPSUS JIRA to increase the partition split size."
     }
 
@@ -314,10 +322,13 @@ END {
         # Round up manually in awk
         if (base_nodes == int(base_nodes)) ceil_nodes = base_nodes
         else ceil_nodes = int(base_nodes) + 1
-        
+
         recommended_nodes = ceil_nodes + 1
-        
-        print "\n[INFO   ] Cluster Expansion Sizing:"
+
+        if (use_color == 1)
+            printf "\n%s[INFO   ]%s Cluster Expansion Sizing:\n", C_GOOD, C_RESET
+        else
+            print "\n[INFO   ] Cluster Expansion Sizing:"
         print "  Current Total Partitions: " total_partitions
         print "  Projected Monthly Growth: " growth " splits/month"
         print "  Baseline nodes required:  " ceil_nodes " (based on 900 per-node limit)"
@@ -346,7 +357,7 @@ if [[ -f "${_size_log}" ]]; then
     ' "${_size_log}")
 
     if [[ -n "${_top10}" ]]; then
-        printf '\n[INFO   ] Top 10 Largest Partitions (by size):\n'
+        gsc_log_info "Top 10 Largest Partitions (by size):"
         printf '  Rank  Partition ID          Size\n'
         printf '  ----  --------------------  ----------\n'
         printf '%s\n' "${_top10}"

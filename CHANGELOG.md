@@ -1,3 +1,11 @@
+## v1.3.3
+- get_partition_details.sh: Colorize all display output following logging conventions. Fix `_use_color` detection to read `_gsc_enable_color` from `gsc_core.sh` (was always 0 due to missing `_gsc__use_color` function). Add ANSI color codes to previously plain messages: leadership `[WARNING]`, END block `CRITICAL:`/`DANGER:`/`[ALERT]`/`[INFO ] Cluster Expansion Sizing`. Replace `echo "Error:..."` with `gsc_die`. Use `gsc_log_info` for Top 10 header.
+
+### SHA256
+```
+d7b20c345ecf42ee7af30afad4c41b5bc79a5190c656514d4b10866748f1c66f  process_health_v1.3.3.tar.xz
+```
+
 ## v1.3.2
 - chk_split_threshold.sh: New check — parses `partition_split_threshold.out` from support bundles. Reports Metadata-Coordination and all Metadata-Gateway node thresholds (Gi → GB label). Validates all nodes share the same threshold (WARNING on mismatch). Emits ACTION when threshold < 16 GB and partition count > 1500. Uses `mapfile+sort` for SIGPIPE-safe file discovery; prefers `collect_healthcheck_data/` files over standalone runs. Wired into `runchk.sh` after `get_partition_details.sh`.
 
