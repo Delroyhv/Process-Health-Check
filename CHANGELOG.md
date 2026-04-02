@@ -1,3 +1,18 @@
+## v1.4.0
+- gsc_grafana.sh: Major refactor — unified container launch via direct `docker run`/`podman run` (removes docker-compose dependency). Named containers `gsc_grafana_<customer>_<sr>` for multi-instance safety. Directory input support for `-D` (copies all `.json` from dir). `_wait_for_grafana()` health poll replaces fixed `sleep 5`. MIME-type detection for URL downloads without recognised extension. Proper `mktemp -d` + `gsc_add_tmp_dir` for URL/git temp dirs. `--volume` requires `--cleanup` guard. Root only required for docker. Default datasource changed from `http://prometheus:9090` to `http://127.0.0.1:9090`.
+- gsc_prometheus.sh: Fix `_min_port`/`_max_port` ignored in port selection — both random and sequential fallback now use configured range. Fix `command -v` → `declare -f` for bash function detection. Fix lock file hardcoded `/tmp` → `${TMPDIR:-/tmp}`. Add `--volume` requires `--cleanup` guard. Validate selected engine with `gsc_require` after `--engine` switch. Add `--engine query` — detects and reports installed docker/podman with path and version; runs without root.
+- gsc_core.sh: Shellcheck SC2155 fixes — split `local _var=$(...)` into separate declare + assign in `gsc_vault_encrypt`, `gsc_vault_decrypt`, `gsc_compare_value`, `gsc_pretty_bytes`, `gsc_check_extract_space`, `gsc_print_space_estimate`. Rename `gsc_arithmetic()` locals `_v1/_v2/_op` → `_arith_a/_arith_b/_arith_op` to avoid masking outer scope vars; replace `echo $((...))` with explicit `case` per operator.
+- chk_filesystem.sh: Rename `_missing` → `_missing_mounts` to avoid variable shadowing.
+- selfcheck.sh: Rename `_missing` → `_missing_files` to avoid variable shadowing.
+- print_node_memory_summary.sh: Fix `${fn "arg"}` → `$(fn "arg")` command substitution in swap warning messages.
+- runchk.sh: Fix array subscript `_chk_metrics_args[$_ci]` → `_chk_metrics_args[_ci]`.
+- dashboards: Replace Dashboard 9 (LP variant) with Dashboard 6 (Services Health).
+
+### SHA256
+```
+2d6966dc3ade3e069fca6a5dd07a9f717f1616b68247ab72f185209f968fbdf7  process_health_v1.4.0.tar.xz
+```
+
 ## v1.3.4
 - runchk.sh: Always print quarterly partition growth to screen — removed guard that suppressed it when `--report` was set.
 - test_battery.sh: Add `--chart yearly,quarterly,monthly` to both `gsc_healthcheck_report.sh` calls so Growth Trends section is included in generated reports.

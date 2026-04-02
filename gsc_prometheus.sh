@@ -80,7 +80,8 @@ Required (via CLI or config file):
 Optional:
   -C, --config-file PATH           Config file (key=value)
       --concurrent                 Enable file locking for concurrent port selection (120s timeout)
-      --engine auto|docker|podman  Container engine (default: auto)
+      --engine auto|docker|podman|query
+                                   Container engine (default: auto); query detects installed engines
       --image IMAGE                Prometheus image (default: ${_image})
       --replace                    Replace existing container with same name
       --keep-container             Do not run container with --rm
@@ -172,9 +173,8 @@ _choose_free_port() {
   RANDOM=$(( _last_used_port + $$ ))
 
   while ((_attempt < _max_attempts)); do
-    # Range: 9090 to 9599
-    _candidate=$(( RANDOM % 510 + 9090 ))
-    
+    # Range: _min_port to _max_port
+    _candidate=$(( RANDOM % (_max_port - _min_port + 1) + _min_port ))
     if ! gsc_port_in_use "${_candidate}"; then
       [[ "${_gsc_debug}" -eq 1 ]] && gsc_log_info "Selected random free port: ${_candidate}"
       echo "${_candidate}"
@@ -185,14 +185,14 @@ _choose_free_port() {
 
   # Fallback to sequential scan if random fails too many times
   local _p
-  for (( _p=9090; _p<=9599; _p++ )); do
+  for (( _p=_min_port; _p<=_max_port; _p++ )); do
     if ! gsc_port_in_use "${_p}"; then
       echo "${_p}"
       return 0
     fi
   done
 
-  gsc_die "No free ports available in range 9090-9599 after random and sequential attempts."
+  gsc_die "No free ports available in range ${_min_port}-${_max_port} after random and sequential attempts."
 }
 
 _save_last_used_port() {
@@ -206,12 +206,28 @@ _detect_engine() {
     return 0
   fi
 
-  if command -v gsc_detect_engine >/dev/null 2>&1; then
+  if declare -f gsc_detect_engine >/dev/null 2>&1; then
     gsc_detect_engine
     return 0
   fi
 
   gsc_detect_container_runtime
+}
+
+_query_engine() {
+  local _found=0
+  for _runtime in podman docker; do
+    if command -v "${_runtime}" >/dev/null 2>&1; then
+      local _path _ver
+      _path=$(command -v "${_runtime}")
+      _ver=$("${_runtime}" --version 2>/dev/null | head -1) || _ver="(version unavailable)"
+      gsc_log_ok "${_runtime}: ${_path} — ${_ver}"
+      _found=1
+    else
+      gsc_log_warn "${_runtime}: not found in PATH"
+    fi
+  done
+  [[ "${_found}" -eq 0 ]] && gsc_die "No container engine found. Install docker or podman."
 }
 
 _cleanup() {
@@ -233,7 +249,7 @@ _start_prometheus_container() {
   gsc_log_info "Starting Prometheus in ${_runtime} on port ${_port} for ${_customer}/${_service_request}"
 
   if [[ "${_replace}" -eq 1 ]]; then
-    if command -v gsc_container_rm_if_exists >/dev/null 2>&1; then
+    if declare -f gsc_container_rm_if_exists >/dev/null 2>&1; then
       gsc_container_rm_if_exists "${_runtime}" "${_name}"
     else
       "${_runtime}" rm -f "${_name}" >/dev/null 2>&1 || true
@@ -259,6 +275,15 @@ _start_prometheus_container() {
 }
 
 _main() {
+  # --engine query and --help/--version do not require root — pre-scan args
+  local _a _prev=""
+  for _a in "$@"; do
+    if [[ "${_prev}" == "--engine" && "${_a}" == "query" ]]; then
+      _query_engine; return 0
+    fi
+    _prev="${_a}"
+  done
+
   gsc_require_root
 
   local _arg
@@ -296,6 +321,11 @@ _main() {
   _read_config
   _build_extra_excluded_ports
 
+  if [[ "${_cleanup_volumes}" -eq 1 && "${_cleanup_mode}" -eq 0 ]]; then
+    gsc_log_error "--volume requires --cleanup"
+    _usage; return 1
+  fi
+
   if [[ "${_cleanup_mode}" -eq 1 ]]; then
     _cleanup
     return 0
@@ -312,9 +342,10 @@ _main() {
     gsc_log_ok "Created base directory '${_base_directory}'."
   fi
 
-  if [[ "${_estimate_only}" -eq 0 ]]; then
-    _detect_engine >/dev/null 2>&1 || gsc_die "Neither podman nor docker found in PATH."
-  fi
+  local _resolved_engine
+  _resolved_engine="$(_detect_engine)" || gsc_die "Neither podman nor docker found in PATH."
+  gsc_require "${_resolved_engine}"
+  _engine="${_resolved_engine}"
 
   mkdir -p "${_log_dir}"
 
@@ -360,7 +391,7 @@ EOPROM
   chmod -R 0777 "${_data_dir}" || true
   chown -R 65534:65534 "${_data_dir}" 2>/dev/null || true
 
-  local _lock_file="/tmp/gsc_prometheus_port.lock"
+  local _lock_file="${TMPDIR:-/tmp}/gsc_prometheus_port.lock"
   local _selected_port=""
   
   if [[ "${_use_flock}" -eq 1 ]]; then
