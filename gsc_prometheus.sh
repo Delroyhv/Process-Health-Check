@@ -54,8 +54,7 @@ _use_flock=0
 # Prefer fully-qualified image name to avoid podman short-name resolution issues
 _image="docker.io/prom/prometheus:latest"
 
-: "${GSC_PROM_LOG_DIR:=/var/log/gsc_prometheus}"
-_log_dir="${GSC_PROM_LOG_DIR}/v${_script_version}"
+_log_dir="/var/log/gsc_prometheus/hcpcs"
 _last_used_port_file="${_log_dir}/last_used_port.txt"
 _last_used_port=9090
 
