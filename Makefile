@@ -26,7 +26,6 @@ bundle: readme
 	  --exclude='*.tar.xz' \
 	  --exclude='*.xz' \
 	  --exclude='*.sha256' \
-	  --exclude='./.' \
 	  --exclude='./2026*' \
 	  --exclude='./supportLogs*' \
 	  --exclude='*.log' \
@@ -38,7 +37,6 @@ bundle: readme
 	  --exclude='./CLAUDE.md' \
 	  --exclude='./collect_metrics.sh' \
 	  --exclude='./chk_collected_metrics.sh' \
-	  --exclude='./hcpcs_db' \
 	  --exclude='./archive' \
 	  --exclude='./dist' \
 	  --exclude='./cd' \
