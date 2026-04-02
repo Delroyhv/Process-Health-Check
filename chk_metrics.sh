@@ -5,7 +5,7 @@
 #
 # It collects various metrics from the HCP for Cloud Scale system.
 #
-_script_version="1.4.1"
+_script_version="1.4.2"
 
 _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091

@@ -1,3 +1,12 @@
+## v1.4.2
+- gsc_prometheus.sh: Log directory changed from version-stamped path (`/var/log/gsc_prometheus/v<version>/`) to static `/var/log/gsc_prometheus/hcpcs/` — `last_used_port.txt` now persists across releases without relocation.
+- All scripts: Sync `_script_version` / `SCRIPT_VERSION` to match project `VERSION` file (`v1.4.1` → `v1.4.2`). Affected: `gsc_prometheus.sh`, `gsc_airgap.sh`, `expand_hcpcs_support.sh`, `chk_metrics.sh`, `chk_collected_metrics.sh`, `collect_metrics.sh`.
+
+### SHA256
+```
+52f2c7652c4b7c3eedb6482703d8015358f52a9296952ea9e5cf1fa1f4eb312f  process_health_v1.4.2.tar.xz
+```
+
 ## v1.4.1
 - gsc_core.sh: Add `gsc_require_arg()` — validates required CLI arguments are non-empty. Interactive mode re-prompts until a valid value is entered; non-interactive (CI/pipe) exits immediately with a clear `[ERROR]` message. Usage: `_var=$(gsc_require_arg "--flag" "description" "${_var}")`.
 - gsc_prometheus.sh: Replace single "Missing required arguments" die with per-flag `gsc_require_arg` calls for `-c`, `-s`, `-f`, `-b` so the user is told exactly which argument is missing and prompted to enter it.

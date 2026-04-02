@@ -5,7 +5,7 @@
 #
 # It collects various metrics from the HCP for Cloud Scale system.
 #
-SCRIPT_VERSION="1.4.1"
+SCRIPT_VERSION="1.4.2"
 ##############################
 #
 # DEFAULT PARAMETERS:

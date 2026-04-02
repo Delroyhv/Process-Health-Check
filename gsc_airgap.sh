@@ -20,7 +20,7 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-_script_version="1.4.1"
+_script_version="1.4.2"
 _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---------------------------------------------------------------------------

@@ -6,13 +6,13 @@
 #   - gsc_container_prometheus.sh
 #   - gsc_docker_prometheus.sh
 #
-# Version: 1.8.31
+# Version: 1.4.2
 #
 
 set -euo pipefail
 IFS=$'\n\t'
 
-_script_version="1.4.1"
+_script_version="1.4.2"
 
 # ---------------------------------------------------------------------------
 # Source common library (and core if present)
