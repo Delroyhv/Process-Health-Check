@@ -91,11 +91,11 @@ sudo ./gsc_prometheus.sh \
 | `-f` | Path to `.tar.xz` snapshot file |
 | `-b` | Base directory for extraction |
 | `--replace` | Remove and replace an existing container of the same name |
-| `--engine auto\|docker\|podman` | Container engine (default: auto) |
+| `--engine auto\|docker\|podman\|query` | Container engine (default: auto); `query` detects and reports installed engines without requiring root |
 | `--image IMAGE` | Prometheus image (default: `docker.io/prom/prometheus:latest`) |
 | `--keep-container` | Do not use `--rm`; leave container after exit |
 | `--min-port N` | Minimum port (default: `9090`) |
-| `--max-port N` | Maximum port (default: `9599`) |
+| `--max-port N` | Maximum port (default: `9200`) |
 | `--exclude-port N` | Additional port(s) to exclude (repeatable) |
 | `--concurrent` | Enable file locking for concurrent port selection (120s timeout) |
 | `--debug` | Enable verbose logging |
@@ -128,7 +128,7 @@ sudo ./gsc_grafana.sh \
 |------|-------------|
 | `-d`, `--docker` | Use Docker as the container engine |
 | `-p`, `--podman` | Use Podman as the container engine |
-| `-D`, `--dashboard FILE` | Path to dashboard JSON or `.zip` archive |
+| `-D`, `--dashboard FILE\|DIR` | Path to dashboard JSON file, directory of JSONs, or `.zip`/`.tar.gz` archive |
 | `--url URL` | Download dashboards from a URL |
 | `--git URL` | Clone a Git repository containing dashboards |
 | `-i`, `--prometheus-data-source IP:PORT` | Specify the Prometheus datasource address |
