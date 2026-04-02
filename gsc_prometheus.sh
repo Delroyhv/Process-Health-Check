@@ -331,9 +331,10 @@ _main() {
     return 0
   fi
 
-  if [[ -z "${_customer}" || -z "${_service_request}" || -z "${_snapshot_file}" || -z "${_base_directory}" ]]; then
-    gsc_die "Missing required arguments (customer, service_request, snapshot_file, base_directory)."
-  fi
+  _customer=$(gsc_require_arg "-c/--customer" "customer name" "${_customer}")
+  _service_request=$(gsc_require_arg "-s/--service-request" "service request number" "${_service_request}")
+  _snapshot_file=$(gsc_require_arg "-f/--snapshot-file" "snapshot file path (.tar.xz)" "${_snapshot_file}")
+  _base_directory=$(gsc_require_arg "-b/--base-directory" "base directory path" "${_base_directory}")
   [[ -f "${_snapshot_file}" ]] || gsc_die "Snapshot file '${_snapshot_file}' does not exist."
 
   if [[ ! -d "${_base_directory}" ]]; then

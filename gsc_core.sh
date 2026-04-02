@@ -44,6 +44,27 @@ gsc_require_root() {
   fi
 }
 
+gsc_require_arg() {
+  # Validates a required CLI argument is non-empty.
+  # Interactive: prompts until a non-blank value is entered.
+  # Non-interactive (CI/pipe): dies immediately with a clear error.
+  # Usage: _var=$(gsc_require_arg "--flag" "human description" "${_var}")
+  local _flag="$1" _desc="$2" _val="$3"
+  if [[ -n "${_val// /}" ]]; then
+    printf '%s\n' "${_val}"
+    return 0
+  fi
+  if [[ ! -t 0 ]]; then
+    gsc_log_error "${_flag} requires a non-blank value: ${_desc}"
+    exit 1
+  fi
+  while [[ -z "${_val// /}" ]]; do
+    gsc_log_warn "${_flag} is required — ${_desc} cannot be blank"
+    read -rp "  Enter ${_desc}: " _val
+  done
+  printf '%s\n' "${_val}"
+}
+
 # -----------------------------
 # Logging
 # -----------------------------

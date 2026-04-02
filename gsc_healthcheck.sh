@@ -65,8 +65,8 @@ parse_args() {
       *) gsc_log_error "Unknown argument: $1"; usage; exit 1 ;;
     esac
   done
-  [[ -n "${_customer}" ]] || gsc_die "Customer name (-c) is mandatory."
-  [[ -n "${_sr_number}" ]] || gsc_die "SR number (-s) is mandatory."
+  _customer=$(gsc_require_arg "-c/--customer" "customer name" "${_customer}")
+  _sr_number=$(gsc_require_arg "-s/--sr" "service request number" "${_sr_number}")
 }
 
 do_cleanup() {
