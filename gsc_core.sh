@@ -335,9 +335,12 @@ gsc_truncate_log() {
 # Temporary directory management
 # -----------------------------
 _gsc_tmp_dirs=()
-gsc_add_tmp_dir() { [[ -d "$1" ]] && _gsc_tmp_dirs+=("$1"); }
+_gsc_tmp_files=()
+gsc_add_tmp_dir()  { [[ -d "$1" ]] && _gsc_tmp_dirs+=("$1"); }
+gsc_add_tmp_file() { [[ -n "$1" ]] && _gsc_tmp_files+=("$1"); }
 gsc_cleanup() {
-  for _d in "${_gsc_tmp_dirs[@]:-}"; do rm -rf -- "${_d}" 2>/dev/null || true; done
+  for _d in "${_gsc_tmp_dirs[@]:-}";  do rm -rf -- "${_d}" 2>/dev/null || true; done
+  for _f in "${_gsc_tmp_files[@]:-}"; do rm -f  -- "${_f}" 2>/dev/null || true; done
   _GSC_SUDO_PASS_VAULTED=""
 }
 
@@ -397,12 +400,12 @@ gsc_container_cleanup() {
   fi
 
   if [[ "${_override}" != "y" ]]; then
-    echo "WARNING: This will stop and remove the following containers:"
-    echo "${_containers}"
-    [[ "${_volumes}" -eq 1 ]] && echo "And DELETE their associated data directories."
+    gsc_log_warn "This will stop and remove the following containers:"
+    gsc_log_info "${_containers}"
+    [[ "${_volumes}" -eq 1 ]] && gsc_log_warn "And DELETE their associated data directories."
 
     local _ans
-    read -p "Are you sure? (y/N): " _ans
+    read -rp "Are you sure? (y/N): " _ans
     [[ "${_ans,,}" != "y" ]] && gsc_die "Cleanup cancelled."
   fi
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 #
 # gsc_healthcheck_report.sh – Generates a styled Markdown or PDF health report
 #                             from GSC health check logs.

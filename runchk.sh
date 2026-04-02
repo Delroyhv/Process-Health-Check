@@ -77,6 +77,7 @@ fi
 # ── Setup Output Capture ─────────────────────────────────────────────────────
 # Fall back to CWD if /tmp is not writable (e.g. restrictive mount on customer systems)
 _tmp_report_output=$(mktemp 2>/dev/null || TMPDIR=. mktemp)
+gsc_add_tmp_file "${_tmp_report_output}"
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 gsc_log_info "========= RUN ALL CHECKS ========="

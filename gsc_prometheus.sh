@@ -388,8 +388,8 @@ scrape_configs:
 EOPROM
 
   gsc_log_info "Setting data directory permissions (may take a moment)..."
-  chmod -R 0777 "${_data_dir}" || true
   chown -R 65534:65534 "${_data_dir}" 2>/dev/null || true
+  chmod -R 0755 "${_data_dir}" || true
 
   local _lock_file="${TMPDIR:-/tmp}/gsc_prometheus_port.lock"
   local _selected_port=""

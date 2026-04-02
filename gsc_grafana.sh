@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 # -----------------------------------------------------------------------------
 # Script: gsc_grafana.sh
 # Description: Sets up a Grafana container with specified dashboards using Docker or Podman.

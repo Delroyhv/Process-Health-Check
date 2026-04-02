@@ -96,7 +96,7 @@ do_cleanup() {
 
   if [[ -n "${_target_dir}" && -d "${_target_dir}" ]]; then
     if [[ "${_override_confirm}" != "y" ]]; then
-        read -p "REALLY remove directory ${_target_dir}? (y/N): " _ans
+        read -rp "REALLY remove directory ${_target_dir}? (y/N): " _ans
         [[ "${_ans,,}" != "y" ]] && gsc_die "Directory removal cancelled."
     fi
     gsc_log_info "Removing directory (with gsc_sudo): ${_target_dir}"
