@@ -35,7 +35,7 @@ _service_request=""
 _snapshot_file=""
 
 _min_port=9090
-_max_port=9200
+_max_port=9999
 
 _debug_flag=0
 _gsc_debug=0

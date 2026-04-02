@@ -95,7 +95,7 @@ sudo ./gsc_prometheus.sh \
 | `--image IMAGE` | Prometheus image (default: `docker.io/prom/prometheus:latest`) |
 | `--keep-container` | Do not use `--rm`; leave container after exit |
 | `--min-port N` | Minimum port (default: `9090`) |
-| `--max-port N` | Maximum port (default: `9200`) |
+| `--max-port N` | Maximum port (default: `9999`) |
 | `--exclude-port N` | Additional port(s) to exclude (repeatable) |
 | `--concurrent` | Enable file locking for concurrent port selection (120s timeout) |
 | `--debug` | Enable verbose logging |
