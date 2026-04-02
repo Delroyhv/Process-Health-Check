@@ -4,7 +4,7 @@
 #
 # Version: 1.8.24
 #
-_script_version="1.8.24"
+_script_version="1.4.1"
 
 set -o errexit
 set -o pipefail

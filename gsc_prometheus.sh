@@ -12,7 +12,7 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-_script_version="1.8.31"
+_script_version="1.4.1"
 
 # ---------------------------------------------------------------------------
 # Source common library (and core if present)
