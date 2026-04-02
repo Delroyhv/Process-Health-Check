@@ -12,6 +12,11 @@ readme:
 	@echo "README.md updated to version $(VERSION)"
 
 bundle: readme
+	@echo "Archiving previous release bundles and SHA256s..."
+	@mkdir -p archive
+	@for f in process_health_v*.tar.xz process_health_v*.sha256 SHA256SUMS; do \
+	  [ -f "$$f" ] && mv -v "$$f" archive/ || true; \
+	done
 	@echo "Creating $(OUT)"
 	@if command -v go >/dev/null 2>&1; then \
 	  echo "Building gsc_calc..."; \
