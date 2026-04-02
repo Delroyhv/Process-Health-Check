@@ -1,3 +1,20 @@
+## v1.4.1
+- gsc_core.sh: Add `gsc_require_arg()` — validates required CLI arguments are non-empty. Interactive mode re-prompts until a valid value is entered; non-interactive (CI/pipe) exits immediately with a clear `[ERROR]` message. Usage: `_var=$(gsc_require_arg "--flag" "description" "${_var}")`.
+- gsc_prometheus.sh: Replace single "Missing required arguments" die with per-flag `gsc_require_arg` calls for `-c`, `-s`, `-f`, `-b` so the user is told exactly which argument is missing and prompted to enter it.
+- gsc_healthcheck.sh: Same — `-c` and `-s` now use `gsc_require_arg` instead of bare `gsc_die`.
+- gsc_prometheus.sh: Increase default `--max-port` from `9200` to `9999` (wider auto-select range).
+- Security: `chmod -R 0777` on Prometheus data dir replaced with chown-first then `chmod -R 0755` in both `gsc_prometheus.sh` and `gsc_airgap.sh` — eliminates world-writable window.
+- gsc_grafana.sh, gsc_healthcheck_report.sh: Add explicit `set -euo pipefail` + `IFS=$'\n\t'` after shebang.
+- gsc_core.sh: Add `gsc_add_tmp_file()` + `_gsc_tmp_files` array; `gsc_cleanup()` now removes individual temp files as well as directories. Replace bare `echo` with `gsc_log_warn`/`gsc_log_info` in cleanup confirmation. Fix `read -p` → `read -rp` (SC2162).
+- gsc_healthcheck.sh: Fix `read -p` → `read -rp`.
+- runchk.sh: Register mktemp output file with `gsc_add_tmp_file` for cleanup on exit.
+- README.md: Fix `--engine` missing `query` option; correct `--max-port` default; update `-D` description to `FILE|DIR`.
+
+### SHA256
+```
+ca28e515abe3e7ffb75fc6d4d82ee4b1ff8b4a381ec8b4209b9d9ef346e10f8a  process_health_v1.4.1.tar.xz
+```
+
 ## v1.4.0
 - gsc_grafana.sh: Major refactor — unified container launch via direct `docker run`/`podman run` (removes docker-compose dependency). Named containers `gsc_grafana_<customer>_<sr>` for multi-instance safety. Directory input support for `-D` (copies all `.json` from dir). `_wait_for_grafana()` health poll replaces fixed `sleep 5`. MIME-type detection for URL downloads without recognised extension. Proper `mktemp -d` + `gsc_add_tmp_dir` for URL/git temp dirs. `--volume` requires `--cleanup` guard. Root only required for docker. Default datasource changed from `http://prometheus:9090` to `http://127.0.0.1:9090`.
 - gsc_prometheus.sh: Fix `_min_port`/`_max_port` ignored in port selection — both random and sequential fallback now use configured range. Fix `command -v` → `declare -f` for bash function detection. Fix lock file hardcoded `/tmp` → `${TMPDIR:-/tmp}`. Add `--volume` requires `--cleanup` guard. Validate selected engine with `gsc_require` after `--engine` switch. Add `--engine query` — detects and reports installed docker/podman with path and version; runs without root.
