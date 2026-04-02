@@ -161,7 +161,7 @@ else
                 _layout_ok=0
                 ((_err++))
                 # Report specific mounts that are missing or extra
-                _missing=$(comm -23 \
+                _missing_mounts=$(comm -23 \
                     <(tr ' ' '\n' <<< "${_ref_mounts}"  | sort) \
                     <(tr ' ' '\n' <<< "${_this_mounts}" | sort) \
                     | tr '\n' ' ')
@@ -169,8 +169,8 @@ else
                     <(tr ' ' '\n' <<< "${_ref_mounts}"  | sort) \
                     <(tr ' ' '\n' <<< "${_this_mounts}" | sort) \
                     | tr '\n' ' ')
-                [[ -n "${_missing// /}" ]] && \
-                    gsc_loga "WARNING: ${_node}: mount points missing vs ${_ref_node}: ${_missing% }"
+                [[ -n "${_missing_mounts// /}" ]] && \
+                    gsc_loga "WARNING: ${_node}: mount points missing vs ${_ref_node}: ${_missing_mounts% }"
                 [[ -n "${_extra// /}" ]] && \
                     gsc_loga "WARNING: ${_node}: extra mount points vs ${_ref_node}: ${_extra% }"
             fi

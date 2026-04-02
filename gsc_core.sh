@@ -347,12 +347,14 @@ gsc_cleanup() {
 _GSC_SUDO_PASS_VAULTED=""
 
 gsc_vault_encrypt() {
-  local _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
+  local _bin
+  _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
   if [[ -x "${_bin}" ]]; then "${_bin}" -op encrypt "$1"; else echo "$1"; fi
 }
 
 gsc_vault_decrypt() {
-  local _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
+  local _bin
+  _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
   if [[ -x "${_bin}" ]]; then "${_bin}" -op decrypt "$1"; else echo "$1"; fi
 }
 
@@ -459,7 +461,8 @@ gsc_compare_value() {
     esac
   fi
   if command -v bc >/dev/null 2>&1; then
-    local _res=$(echo "if (${_val} ${_op} ${_lim}) 1 else 0" | bc 2>/dev/null)
+    local _res
+    _res=$(echo "if (${_val} ${_op} ${_lim}) 1 else 0" | bc 2>/dev/null)
     [[ "${_res}" == "1" ]] && { printf '%s\n' "${_val} ${_op} ${_lim}"; return 0; }
     return 1
   fi
@@ -467,12 +470,19 @@ gsc_compare_value() {
 }
 
 gsc_arithmetic() {
-  local _v1="$1" _op="$2" _v2="$3"
-  if [[ "${_v1}" =~ ^-?[0-9]+$ ]] && [[ "${_v2}" =~ ^-?[0-9]+$ ]] && [[ "${_op}" =~ ^[+\-*/%]$ ]]; then
-    [[ ("${_op}" == "/" || "${_op}" == "%") && "${_v2}" == "0" ]] && return 1
-    echo $(( _v1 ${_op} _v2 )); return 0
+  local _arith_a="$1" _arith_op="$2" _arith_b="$3"
+  if [[ "${_arith_a}" =~ ^-?[0-9]+$ ]] && [[ "${_arith_b}" =~ ^-?[0-9]+$ ]] && [[ "${_arith_op}" =~ ^[+\-*/%]$ ]]; then
+    [[ ("${_arith_op}" == "/" || "${_arith_op}" == "%") && "${_arith_b}" == "0" ]] && return 1
+    case "${_arith_op}" in
+      '+') echo $(( _arith_a + _arith_b )) ;;
+      '-') echo $(( _arith_a - _arith_b )) ;;
+      '*') echo $(( _arith_a * _arith_b )) ;;
+      '/') echo $(( _arith_a / _arith_b )) ;;
+      '%') echo $(( _arith_a % _arith_b )) ;;
+    esac
+    return 0
   fi
-  if command -v bc >/dev/null 2>&1; then echo "scale=2; ${_v1} ${_op} ${_v2}" | bc 2>/dev/null && return 0; fi
+  if command -v bc >/dev/null 2>&1; then echo "scale=2; ${_arith_a} ${_arith_op} ${_arith_b}" | bc 2>/dev/null && return 0; fi
   return 1
 }
 
@@ -488,7 +498,8 @@ gsc_pretty_bytes() {
   for ((i=0; i<${#_units[@]}; i++)); do
     if (( _bytes < 1024**($i+1) )); then _scale=$((1024**$i)); break; fi
   done
-  local _val=$(echo "scale=1; ${_bytes} / ${_scale}" | bc)
+  local _val
+  _val=$(echo "scale=1; ${_bytes} / ${_scale}" | bc)
   echo "${_val}${_units[$i]}" | sed 's/\.0//'
 }
 
@@ -580,8 +591,9 @@ gsc_estimate_uncompressed_size() {
 
 gsc_check_extract_space() {
   local _archive="$1" _target_dir="$2" _warn_pct="${3:-10}" _fail_pct="${4:-5}"
-  local _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 0
-  local _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 0
+  local _size _df_line
+  _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 0
+  _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 0
   read -r _dev _total _used _avail _use _mnt <<<"${_df_line}"
   local _free_after=$((_avail - _size))
   if (( _free_after < 0 )); then gsc_log_error "Not enough space"; return 2; fi
@@ -591,8 +603,9 @@ gsc_check_extract_space() {
 
 gsc_print_space_estimate() {
   local _archive="$1" _target_dir="$2"
-  local _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 1
-  local _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 1
+  local _size _df_line
+  _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 1
+  _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 1
   read -r _dev _total _used _avail _use _mnt <<<"${_df_line}"
   local _pct=$(( 100 * (_avail - _size) / _total ))
   gsc_log_info "Estimate for ${_archive}: size≈$((_size/1048576)) MiB, free_after≈~${_pct}%."

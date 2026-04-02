@@ -2221,7 +2221,7 @@
         "type": "prometheus",
         "uid": "${ClusterName}"
       },
-      "description": "Attention if Partition Size is above 1.5x the default size (16GB is default split threshold).\nAlarm if if Partition Size is above 2x the default size (>32GB).",
+      "description": "Attention if Partition Size is above 1.5x the default size (1GB is default split threshold).\nAlarm if if Partition Size is above 2x the default size (>2GB).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2236,37 +2236,37 @@
                   "index": 0,
                   "text": "Healthy"
                 },
-                "to": 24000000000
+                "to": 1500000000
               },
               "type": "range"
             },
             {
               "options": {
-                "from": 24000000000,
+                "from": 1500000000,
                 "result": {
                   "color": "yellow",
                   "index": 1,
                   "text": "High partition size - check Metadata Coordination service in System Management UI"
                 },
-                "to": 48000000000
+                "to": 3000000000
               },
               "type": "range"
             },
             {
               "options": {
-                "from": 48000000001,
+                "from": 3000000001,
                 "result": {
                   "color": "light-red",
                   "index": 2,
                   "text": "Very high partition size - check Metadata Coordination service in System Management UI"
                 },
-                "to": 80000000000
+                "to": 5000000000
               },
               "type": "range"
             },
             {
               "options": {
-                "from": 80000000000,
+                "from": 5000000000,
                 "result": {
                   "color": "dark-red",
                   "index": 3,
@@ -2285,15 +2285,15 @@
               },
               {
                 "color": "yellow",
-                "value": 24000000000
+                "value": 1500000000
               },
               {
                 "color": "light-red",
-                "value": 48000000000
+                "value": 3000000000
               },
               {
                 "color": "dark-red",
-                "value": 80000000000
+                "value": 5000000000
               }
             ]
           },
@@ -2393,7 +2393,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Normal Size (<24GB)"
+                "value": "Normal Size (<1.5GB)"
               },
               {
                 "id": "thresholds",
@@ -2416,7 +2416,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Large (24-48GB)"
+                "value": "Large (1.5-3GB)"
               },
               {
                 "id": "thresholds",
@@ -2443,7 +2443,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Very Large (>48GB)"
+                "value": "Very Large (>3GB)"
               },
               {
                 "id": "thresholds",
@@ -2470,7 +2470,7 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "Extremely Large (>80GB)"
+                "value": "Extremely Large (>5GB)"
               },
               {
                 "id": "thresholds",
@@ -2520,7 +2520,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "count(mcs_disk_usage_per_partition < 24000000000)",
+          "expr": "count(mcs_disk_usage_per_partition < 1500000000)",
           "format": "table",
           "interval": "",
           "legendFormat": "Normal size",
@@ -2534,7 +2534,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "count(mcs_disk_usage_per_partition < 48000000000) - count(mcs_disk_usage_per_partition < 24000000000) ",
+          "expr": "count(mcs_disk_usage_per_partition < 3000000000) - count(mcs_disk_usage_per_partition < 1500000000) ",
           "format": "table",
           "hide": false,
           "interval": "",
@@ -2549,7 +2549,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "count(mcs_disk_usage_per_partition >= 48000000000) - count(mcs_disk_usage_per_partition > 80000000000)",
+          "expr": "count(mcs_disk_usage_per_partition >= 3000000000) - count(mcs_disk_usage_per_partition > 5000000000)",
           "format": "table",
           "hide": false,
           "interval": "",
@@ -2564,7 +2564,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "count(mcs_disk_usage_per_partition >= 80000000000)",
+          "expr": "count(mcs_disk_usage_per_partition >= 5000000000)",
           "format": "table",
           "hide": false,
           "interval": "",
@@ -2619,15 +2619,15 @@
               },
               {
                 "color": "yellow",
-                "value": 24000000000
+                "value": 1500000000
               },
               {
                 "color": "light-red",
-                "value": 48000000000
+                "value": 3000000000
               },
               {
                 "color": "dark-red",
-                "value": 80000000000
+                "value": 5000000000
               }
             ]
           },
@@ -2686,7 +2686,7 @@
         "type": "prometheus",
         "uid": "${ClusterName}"
       },
-      "description": "A large partition is a partition with a size over 24GB.\nPartitions under 50% of the threshold (default is 16GB) are considered \"normal\", as the partition split could be delayed. ",
+      "description": "A large partition is a partition with a size over 1.5GB.\nPartitions under 50% of the threshold (default is 1GB) are considered \"normal\", as the partition split could be delayed. ",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2768,10 +2768,10 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "count(mcs_disk_usage_per_partition < 24000000000)",
+          "expr": "count(mcs_disk_usage_per_partition < 1500000000)",
           "hide": true,
           "interval": "",
-          "legendFormat": "Normal size (<24GB)",
+          "legendFormat": "Normal size (<1.5GB)",
           "range": true,
           "refId": "A"
         },
@@ -2782,10 +2782,10 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "count(mcs_disk_usage_per_partition < 48000000000) - count(mcs_disk_usage_per_partition <= 24000000000) ",
+          "expr": "count(mcs_disk_usage_per_partition < 3000000000) - count(mcs_disk_usage_per_partition <= 1500000000) ",
           "hide": false,
           "interval": "",
-          "legendFormat": "Large (24-48GB)",
+          "legendFormat": "Large (1.5-3GB)",
           "range": true,
           "refId": "B"
         },
@@ -2796,10 +2796,10 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "count(mcs_disk_usage_per_partition >= 48000000000)",
+          "expr": "count(mcs_disk_usage_per_partition >= 3000000000)",
           "hide": false,
           "interval": "",
-          "legendFormat": "Very Large (>48GB)",
+          "legendFormat": "Very Large (>3GB)",
           "range": true,
           "refId": "C"
         }
@@ -7239,8 +7239,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "HCP for Cloud Scale - Dashboard 9: Services Health LP",
-  "uid": "hcpcsdashboard9lp",
+  "title": "HCP for Cloud Scale - Dashboard 6: Services Health",
+  "uid": "hcpcsdashboard6",
   "version": 1,
   "weekStart": ""
 }

@@ -3,6 +3,6 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: "http://10.0.1.105:9232"
     isDefault: true
     editable: true

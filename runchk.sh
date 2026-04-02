@@ -225,7 +225,7 @@ elif [[ "${_no_metrics}" -eq 0 ]]; then
             for _ci in "${!_chk_metrics_args[@]}"; do
                 if [[ "${_chk_metrics_args[$_ci]}" == *.json && ! -f "${_chk_metrics_args[$_ci]}" ]]; then
                     _fallback="${_script_dir}/$(basename -- "${_chk_metrics_args[$_ci]}")"
-                    [[ -f "${_fallback}" ]] && _chk_metrics_args[$_ci]="${_fallback}"
+                    [[ -f "${_fallback}" ]] && _chk_metrics_args[_ci]="${_fallback}"
                 fi
             done
             "${_script_dir}/chk_metrics.sh" "${_chk_metrics_args[@]}" 2>&1 | tee -a "${_tmp_report_output}" || true

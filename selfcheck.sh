@@ -32,11 +32,11 @@ _required=(
   "hcpcs_parse_partitions_state.sh"
 )
 
-_missing=0
+_missing_files=0
 for _f in "${_required[@]}"; do
   if [[ ! -e "${_script_dir}/${_f}" ]]; then
     gsc_log_error "Missing required file: ${_f}"
-    _missing=1
+    _missing_files=1
     continue
   fi
   if [[ "${_f}" == *.sh && ! -x "${_script_dir}/${_f}" ]]; then
@@ -45,7 +45,7 @@ for _f in "${_required[@]}"; do
   fi
 done
 
-if [[ "${_missing}" -ne 0 ]]; then
+if [[ "${_missing_files}" -ne 0 ]]; then
   gsc_die "Selfcheck failed: missing required files"
 fi
 
