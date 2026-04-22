@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 # -----------------------------------------------------------------------------
 # Script: gsc_grafana.sh
 # Description: Sets up a Grafana container with specified dashboards using Docker or Podman.
-#              Supports dashboard files, URLs, git repositories, and compressed archives.
+#              Supports dashboard files, directories, URLs, git repositories, and archives.
 # Author: GSC
 # -----------------------------------------------------------------------------
 
@@ -17,33 +19,42 @@ _container_engine=""
 _dashboards=()
 _url=""
 _git_repo=""
-_datasource_url="http://prometheus:9090"
+_datasource_url="http://127.0.0.1:9090"
+_datasource_name="Prometheus"
+_datasource_specs=()
+_datasource_uids=()
+_remove_datasource_names=()
+_grafana_server_url="http://127.0.0.1:3000"
+_grafana_user="admin"
+_grafana_token="admin"
 _grafana_port="3000"
 _admin_password="admin"
 _update_dashboards=0
 _query_mode=0
 _cleanup_mode=0
 _cleanup_volumes=0
+_increment_mode=0
 _override_confirm=""
+_grafana_crud_mode=0
 _script_name=$(basename "$0")
 _dashboard_dir="dashboards"
 _provisioning_dir="provisioning"
 _customer="unknown"
 _sr_number="unknown"
-_timestamp=$(date +%Y%m%d_%H%M%S)
-_error_log="${_timestamp}.error.log"
+_container_name=""   # resolved after parse_args
 
 # -------------------------------
 # Helper: Print usage
 # -------------------------------
 print_usage() {
+    local _exit_code="${1:-1}"
     cat <<EOF
-Usage: $_script_name [-p|--podman] [-d|--docker] -D|--dashboard [file2 ...] [options]
+Usage: $_script_name [-p|--podman] [-d|--docker] -D|--dashboard [file|dir ...] [options]
 
 Core Options:
   -p, --podman                       Use Podman as the container engine
   -d, --docker                       Use Docker as the container engine
-  -D, --dashboard FILE               Add one or more dashboard JSON or archive files
+  -D, --dashboard FILE|DIR           Add one or more dashboard JSON files, directories, or archives
   -f FILE                            Alias for -D (for compatibility with healthcheck suite)
   -c, --customer NAME                Specify the customer name (for organizational purposes)
   -s, --sr-number SR_NUMBER          Specify the Service Request (SR) number
@@ -53,22 +64,114 @@ Core Options:
 Additional Options:
   -i, --input IP:PORT,
   --prometheus-data-source IP:PORT   Specify the Prometheus datasource IP and port (e.g., 172.22.20.26:9090)
+  --datasource NAME=URL              Add a datasource entry for provisioning (repeatable)
+  --remove-datasource NAME           Remove a datasource entry from provisioning (repeatable)
+  --list-datasources                 Print resolved datasources and exit
+  --grafana-server HOST:PORT         Target Grafana API endpoint for datasource CRUD/list operations
+  --grafana-user USER                Grafana API username (default: admin)
+  --grafana-token TOKEN              Grafana API token/password (default: admin)
   -g, --grafana-port PORT            Specify the Grafana port (default: 3000)
   --admin-password PASSWORD          Specify the Grafana admin password (default: admin)
   --update                           Update existing dashboards without clearing the directory
   --query                            Scan for running Prometheus containers and healthcheck.conf to set the datasource
   --cleanup                          Stop and remove the Grafana container
+  --increment                        Auto-increment container name if one already exists
   --volume                           Delete dashboards and provisioning directories during cleanup (requires --cleanup)
   --override=y                       Skip confirmation prompts for cleanup
-  
+
   Example:
     sudo $_script_name --docker -D dashboard1.json dashboards.zip
     sudo $_script_name --podman --prometheus-data-source 172.22.20.26:9090 --grafana-port 3001 --update
     sudo $_script_name --podman --query
+    sudo $_script_name --docker --cleanup --override=y
+    sudo $_script_name --docker -D DashBoards --increment
+    sudo $_script_name --docker --datasource Loki=http://127.0.0.1:3100 --list-datasources
+    sudo $_script_name --docker --grafana-server 127.0.0.1:3001 --list-datasources
+    sudo $_script_name --docker --grafana-server 127.0.0.1:3001 --grafana-user admin --grafana-token admin --datasource Loki=http://127.0.0.1:3100
 EOF
-    exit 1
+    exit "${_exit_code}"
 }
-  
+
+add_default_datasource() {
+    _datasource_specs+=("${_datasource_name}=${_datasource_url}")
+}
+
+parse_datasource_spec() {
+    local _spec="$1"
+    local _name="${_spec%%=*}"
+    local _url="${_spec#*=}"
+
+    if [[ -z "${_name}" || -z "${_url}" || "${_name}" == "${_spec}" ]]; then
+        gsc_log_error "Invalid datasource specification: ${_spec} (expected NAME=URL)"
+        exit 1
+    fi
+
+    _datasource_specs+=("${_name}=${_url}")
+}
+
+make_datasource_uid() {
+    local _name="$1"
+    local _url="$2"
+    local _raw="${_name}|${_url}"
+    if command -v sha256sum >/dev/null 2>&1; then
+        printf 'ds_%s\n' "$(printf '%s' "${_raw}" | sha256sum | awk '{print substr($1,1,12)}')"
+    elif command -v shasum >/dev/null 2>&1; then
+        printf 'ds_%s\n' "$(printf '%s' "${_raw}" | shasum -a 256 | awk '{print substr($1,1,12)}')"
+    else
+        printf 'ds_%s\n' "$(printf '%s' "${_raw}" | cksum | awk '{print $1}')"
+    fi
+}
+
+grafana_api_curl() {
+    local _method="$1"
+    local _path="$2"
+    shift 2
+    curl -fsS -u "${_grafana_user}:${_grafana_token}" \
+        -H "Content-Type: application/json" \
+        -X "${_method}" "${_grafana_server_url}${_path}" "$@"
+}
+
+grafana_api_list_datasources() {
+    gsc_require jq
+    grafana_api_curl GET "/api/datasources" | jq -r '.[] | "\(.name) [\(.uid)] => \(.url)"'
+}
+
+grafana_api_add_datasource() {
+    local _spec
+    for _spec in "${_datasource_specs[@]}"; do
+        local _name="${_spec%%=*}"
+        local _url="${_spec#*=}"
+        local _uid
+        _uid=$(make_datasource_uid "${_name}" "${_url}")
+        local _payload
+        _payload=$(cat <<EOF
+{"name":"${_name}","uid":"${_uid}","type":"prometheus","access":"proxy","url":"${_url}","isDefault":false,"editable":true}
+EOF
+)
+        if grafana_api_curl POST "/api/datasources" -d "${_payload}" >/dev/null; then
+            gsc_log_ok "Added datasource via Grafana API: ${_name} [${_uid}]"
+        else
+            gsc_log_error "Failed to add datasource via Grafana API: ${_name}"
+            exit 1
+        fi
+    done
+}
+
+grafana_api_remove_datasource() {
+    local _target _ds_json _ds_uid _ds_name
+    for _target in "${_remove_datasource_names[@]}"; do
+        _ds_json="$(grafana_api_curl GET "/api/datasources" | jq -r --arg tgt "${_target}" '.[] | select(.name == $tgt or .uid == $tgt) | @base64' | head -n1 || true)"
+        if [[ -z "${_ds_json}" ]]; then
+            gsc_log_warn "Datasource not found on Grafana server: ${_target}"
+            continue
+        fi
+        _ds_name="$(printf '%s' "${_ds_json}" | base64 -d | jq -r '.name')"
+        _ds_uid="$(printf '%s' "${_ds_json}" | base64 -d | jq -r '.uid')"
+        grafana_api_curl DELETE "/api/datasources/uid/${_ds_uid}" >/dev/null
+        gsc_log_ok "Removed datasource via Grafana API: ${_ds_name} [${_ds_uid}]"
+    done
+}
+
 # -------------------------------
 # Helper: Query Prometheus Sources
 # -------------------------------
@@ -78,7 +181,6 @@ query_prometheus_sources() {
 
     gsc_log_info "Scanning for Prometheus data sources..."
 
-    # Check healthcheck.conf
     if [[ -f "$_hc_file" ]]; then
         local _hc_port
         _hc_port=$(grep -E "^_prom_port=" "$_hc_file" | cut -d'"' -f2)
@@ -87,7 +189,6 @@ query_prometheus_sources() {
         fi
     fi
 
-    # Scan running containers (try both podman and docker)
     local _runtime
     for _runtime in podman docker; do
         if command -v "$_runtime" >/dev/null 2>&1; then
@@ -99,7 +200,6 @@ query_prometheus_sources() {
                 local _name="${_line%% *}"
                 local _ports="${_line#* }"
                 local _hp
-                # Extract host port from mapping (e.g., 0.0.0.0:9090->9090/tcp or 9090/tcp)
                 if [[ "$_ports" =~ :([0-9]+)-\>9090 ]]; then
                     _hp="${BASH_REMATCH[1]}"
                     _found_sources+=("Container: $_name (Port: $_hp)")
@@ -136,23 +236,75 @@ query_prometheus_sources() {
     gsc_log_ok "Datasource set to: $_datasource_url"
 }
 
-# -------------------------------
-# Helper: Cleanup Grafana
-# -------------------------------
-cleanup_grafana() {
-    local _runtime="${_container_engine:-}"
-    if [[ -z "$_runtime" ]]; then
-        if command -v podman >/dev/null 2>&1; then _runtime="podman"; else _runtime="docker"; fi
-    fi
-    gsc_container_cleanup "${_runtime}" "^grafana$" "${_override_confirm}" "${_cleanup_volumes}"
+list_datasources() {
+    local _spec
+    gsc_log_info "Resolved datasource entries for Grafana server: ${_grafana_server_url}"
+    for _spec in "${_datasource_specs[@]}"; do
+        local _name="${_spec%%=*}"
+        local _url="${_spec#*=}"
+        local _uid
+        _uid=$(make_datasource_uid "${_name}" "${_url}")
+        printf '  - %s [%s] => %s\n' "${_name}" "${_uid}" "${_url}"
+    done
 }
 
 # -------------------------------
-# Validate dashboard files
+# Helper: Stop/remove Grafana containers and optionally delete data dirs
+# -------------------------------
+cleanup_grafana() {
+    local _runtime="${_container_engine:-}"
+    [[ -z "$_runtime" ]] && { command -v podman >/dev/null 2>&1 && _runtime="podman" || _runtime="docker"; }
+
+    local _containers
+    if [[ -n "${_container_name:-}" ]]; then
+        _containers=$("${_runtime}" ps -a --format '{{.Names}}' | grep -E "^${_container_name}$" || true)
+    else
+        _containers=$("${_runtime}" ps -a --format '{{.Names}}' | grep -E "^gsc_grafana_" || true)
+    fi
+
+    if [[ -z "${_containers}" && "${_cleanup_volumes}" -eq 0 ]]; then
+        gsc_log_info "No Grafana containers found."
+        return 0
+    fi
+
+    if [[ "${_override_confirm}" != "y" ]]; then
+        if [[ -n "${_containers}" ]]; then
+            echo "WARNING: This will stop and remove the following containers:"
+            echo "${_containers}"
+        fi
+        [[ "${_cleanup_volumes}" -eq 1 ]] && echo "And delete: ${_dashboard_dir}/ ${_provisioning_dir}/"
+        local _ans
+        read -rp "Are you sure? (y/N): " _ans
+        [[ "${_ans,,}" != "y" ]] && gsc_die "Cleanup cancelled."
+    fi
+
+    local _name
+    for _name in ${_containers}; do
+        gsc_log_info "Stopping and removing container: ${_name}"
+        "${_runtime}" stop "${_name}" >/dev/null 2>&1 || true
+        "${_runtime}" rm -f "${_name}" >/dev/null 2>&1 || true
+    done
+
+    if [[ "${_cleanup_volumes}" -eq 1 ]]; then
+        for _dir in "${_dashboard_dir}" "${_provisioning_dir}"; do
+            if [[ -d "${_dir}" ]]; then
+                rm -rf "${_dir}"
+                gsc_log_info "Deleted: ${_dir}"
+            fi
+        done
+    fi
+
+    gsc_log_ok "Cleanup complete."
+}
+
+# -------------------------------
+# Validate dashboard inputs (files or directories)
 # -------------------------------
 validate_dashboards() {
     for _file in "${_dashboards[@]}"; do
-        [[ ! -f "$_file" ]] && gsc_log_error "Dashboard file not found: $_file" && exit 1
+        if [[ ! -f "$_file" && ! -d "$_file" ]]; then
+            gsc_log_error "Dashboard path not found: $_file"; exit 1
+        fi
     done
 }
 
@@ -163,11 +315,69 @@ extract_archive() {
     local _archive="$1"
     mkdir -p "$_dashboard_dir"
     case "$_archive" in
-        *.zip) unzip -o "$_archive" -d "$_dashboard_dir" ;;
+        *.zip)    gsc_require unzip; unzip -o "$_archive" -d "$_dashboard_dir" ;;
         *.tar.gz) tar -xzf "$_archive" -C "$_dashboard_dir" ;;
         *.tar.xz) tar -xJf "$_archive" -C "$_dashboard_dir" ;;
         *) gsc_log_error "Unsupported archive format: $_archive"; exit 1 ;;
     esac
+}
+
+# -------------------------------
+# Ingest a dashboard directory
+# -------------------------------
+ingest_dashboard_dir() {
+    local _dir="$1"
+    local -a _files=()
+    local -a _jsons=()
+    local -a _archives=()
+
+    gsc_log_info "Ingesting dashboard directory: ${_dir}"
+
+    mapfile -t _files < <(find "$_dir" -type f | sort)
+    if [[ ${#_files[@]} -eq 0 ]]; then
+        gsc_log_error "Dashboard directory is empty: $_dir"
+        exit 1
+    fi
+
+    mapfile -t _jsons < <(find "$_dir" -type f -name '*.json' | sort)
+    mapfile -t _archives < <(find "$_dir" -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.tar.xz' \) | sort)
+
+    if [[ ${#_jsons[@]} -eq 0 && ${#_archives[@]} -eq 0 ]]; then
+        gsc_log_error "Directory contains files, but no dashboard JSON or archives were found: $_dir"
+        exit 1
+    fi
+
+    if [[ ${#_jsons[@]} -gt 0 ]]; then
+        for _jf in "${_jsons[@]}"; do
+            local _dest="${_dashboard_dir}/$(basename "$_jf")"
+            [[ "$_jf" == "$_dest" ]] && continue
+            cp "$_jf" "$_dashboard_dir/"
+        done
+    fi
+
+    if [[ ${#_archives[@]} -gt 0 ]]; then
+        for _af in "${_archives[@]}"; do
+            extract_archive "$_af"
+        done
+    fi
+}
+
+resolve_container_name() {
+    local _runtime="${_container_engine:-}"
+    local _base="gsc_grafana_${_customer}_${_sr_number}"
+    local _name="${_base}"
+    local _suffix=2
+
+    [[ -z "$_runtime" ]] && { command -v podman >/dev/null 2>&1 && _runtime="podman" || _runtime="docker"; }
+
+    if [[ "${_increment_mode}" -eq 1 ]]; then
+        while "${_runtime}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "${_name}"; do
+            _name="${_base}_${_suffix}"
+            ((_suffix++))
+        done
+    fi
+
+    printf '%s\n' "${_name}"
 }
 
 # -------------------------------
@@ -186,37 +396,46 @@ parse_args() {
                 done
                 ;;
             -c|--customer)
-                shift
-                _customer=$(gsc_sanitize_name "$1"); shift ;;
+                shift; _customer=$(gsc_sanitize_name "$1"); shift ;;
             -s|--sr-number)
-                shift
-                _sr_number=$(gsc_sanitize_name "$1"); shift ;;
+                shift; _sr_number=$(gsc_sanitize_name "$1"); shift ;;
             --url)
-                shift
-                _url="$1"; shift ;;
+                shift; _url="$1"; shift ;;
             --git)
-                shift
-                _git_repo="$1"; shift ;;
+                shift; _git_repo="$1"; shift ;;
             -i|--input|--prometheus-data-source)
-                shift
-                _datasource_url="http://$1"; shift ;;
+                shift; _datasource_url="http://$1"; shift ;;
+            --datasource)
+                shift; parse_datasource_spec "$1"; _grafana_crud_mode=1; shift ;;
+            --remove-datasource)
+                shift; _remove_datasource_names+=("$1"); _grafana_crud_mode=1; shift ;;
+            --list-datasources)
+                _query_mode=2; _grafana_crud_mode=1; shift ;;
+            --grafana-server)
+                shift; _grafana_server_url="http://$1"; shift ;;
+            --grafana-user)
+                shift; _grafana_user="$1"; shift ;;
+            --grafana-token)
+                shift; _grafana_token="$1"; shift ;;
             -g|--grafana-port)
-                shift
-                _grafana_port="$1"; shift ;;
+                shift; _grafana_port="$1"; shift ;;
             --admin-password)
-                shift
-                _admin_password="$1"; shift ;;
+                shift; _admin_password="$1"; shift ;;
             --update)
                 _update_dashboards=1; shift ;;
             --query)
                 _query_mode=1; shift ;;
             --cleanup)
                 _cleanup_mode=1; shift ;;
+            --increment)
+                _increment_mode=1; shift ;;
             --volume)
                 _cleanup_volumes=1; shift ;;
             --override=y)
                 _override_confirm="y"; shift ;;
-            -*) gsc_log_error "Unknown option: $1"; print_usage ;;
+            -h|--help)
+                print_usage 0 ;;
+            -*) gsc_log_error "Unknown option: $1"; print_usage 1 ;;
         esac
     done
 }
@@ -225,46 +444,133 @@ parse_args() {
 # Download from URL if given
 # -------------------------------
 download_url() {
-    if [[ -n "$_url" ]]; then
-        gsc_log_info "Downloading from URL: $_url"
-        mkdir -p temp_download
-        curl -L -o temp_download/downloaded_file "$_url" || wget -O temp_download/downloaded_file "$_url"
-        _dashboards+=("temp_download/downloaded_file")
+    [[ -z "$_url" ]] && return 0
+
+    gsc_log_info "Downloading from URL: $_url"
+
+    local _tmp_dl
+    _tmp_dl=$(mktemp -d)
+    gsc_add_tmp_dir "${_tmp_dl}"
+
+    # Derive filename from URL path (strip query string)
+    local _fname
+    _fname=$(basename "${_url%%\?*}")
+    [[ -z "$_fname" || "$_fname" == "/" ]] && _fname="dashboard_download"
+
+    local _dest="${_tmp_dl}/${_fname}"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL -o "${_dest}" "${_url}" || { gsc_log_error "Download failed: $_url"; exit 1; }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "${_dest}" "${_url}" || { gsc_log_error "Download failed: $_url"; exit 1; }
+    else
+        gsc_log_error "Neither curl nor wget is available for --url download"; exit 1
     fi
+
+    # If no recognized extension, probe MIME type to add the correct one
+    if [[ ! "${_dest}" =~ \.(json|zip|tar\.gz|tar\.xz)$ ]]; then
+        if ! command -v file >/dev/null 2>&1; then
+            gsc_log_error "Downloaded file '${_fname}' has no recognized extension and 'file' command is unavailable"; exit 1
+        fi
+        local _mime
+        _mime=$(file --mime-type -b "${_dest}")
+        case "${_mime}" in
+            application/json|text/plain)          mv "${_dest}" "${_dest}.json";   _dest="${_dest}.json" ;;
+            application/zip)                      mv "${_dest}" "${_dest}.zip";    _dest="${_dest}.zip" ;;
+            application/x-xz|application/x-tar)  mv "${_dest}" "${_dest}.tar.xz"; _dest="${_dest}.tar.xz" ;;
+            application/gzip|application/x-gzip) mv "${_dest}" "${_dest}.tar.gz"; _dest="${_dest}.tar.gz" ;;
+            *) gsc_log_error "Cannot determine dashboard file type (mime: ${_mime}): ${_dest}"; exit 1 ;;
+        esac
+    fi
+
+    _dashboards+=("${_dest}")
 }
 
 # -------------------------------
 # Clone Git repository if given
 # -------------------------------
 clone_git_repo() {
-    if [[ -n "$_git_repo" ]]; then
-        gsc_log_info "Cloning Git repo: $_git_repo"
-        git clone "$_git_repo" temp_git || { gsc_log_error "Git clone failed."; exit 1; }
-        local -a _repo_files=()
-        mapfile -t _repo_files < <(find temp_git -type f -name '*.json')
-        _dashboards+=("${_repo_files[@]}")
-    fi
+    [[ -z "$_git_repo" ]] && return 0
+
+    gsc_require git
+    gsc_log_info "Cloning Git repo: $_git_repo"
+
+    local _tmp_git
+    _tmp_git=$(mktemp -d)
+    gsc_add_tmp_dir "${_tmp_git}"
+
+    git clone "$_git_repo" "${_tmp_git}/repo" || { gsc_log_error "Git clone failed."; exit 1; }
+
+    local -a _repo_files=()
+    mapfile -t _repo_files < <(find "${_tmp_git}/repo" -type f -name '*.json')
+    _dashboards+=("${_repo_files[@]}")
+}
+
+prune_datasources() {
+    local -a _kept=()
+    local _spec _remove
+    for _spec in "${_datasource_specs[@]}"; do
+        local _name="${_spec%%=*}"
+        local _url="${_spec#*=}"
+        local _uid
+        _uid=$(make_datasource_uid "${_name}" "${_url}")
+        local _drop=0
+        for _remove in "${_remove_datasource_names[@]}"; do
+            if [[ "${_name}" == "${_remove}" || "${_uid}" == "${_remove}" ]]; then
+                _drop=1
+                break
+            fi
+        done
+        [[ "${_drop}" -eq 0 ]] && _kept+=("${_spec}")
+    done
+    _datasource_specs=("${_kept[@]}")
 }
 
 # -------------------------------
 # Prepare file structure and provisioning
 # -------------------------------
 prepare_structure() {
-    # Only create/clear dashboards directory if we are not in 'update' mode
-    # or if we are in update mode but new dashboards were provided.
+    local _preserve_dashboard_dir=0
+    local _file
+    for _file in "${_dashboards[@]}"; do
+        if [[ "${_file}" == "${_dashboard_dir}" ]]; then
+            _preserve_dashboard_dir=1
+            break
+        fi
+    done
+
     if [[ "$_update_dashboards" -eq 0 ]]; then
-        rm -rf "$_dashboard_dir"
-        mkdir -p "$_dashboard_dir"
+        if [[ -d "$_dashboard_dir" && ! -w "$_dashboard_dir" ]]; then
+            gsc_log_error "Cannot remove '${_dashboard_dir}': permission denied (created by a previous sudo/docker run)."
+            gsc_log_error "Fix: sudo rm -rf '${_dashboard_dir}' '${_provisioning_dir}'"
+            exit 1
+        fi
+        if [[ "${_preserve_dashboard_dir}" -eq 0 ]]; then
+            rm -rf "$_dashboard_dir"
+            mkdir -p "$_dashboard_dir"
+        else
+            gsc_log_info "Using '${_dashboard_dir}' as both the input dashboard directory and the Grafana staging directory."
+            gsc_log_info "Existing dashboard files will be preserved and re-used."
+        fi
     fi
 
     mkdir -p "$_provisioning_dir/dashboards" "$_provisioning_dir/datasources"
 
+    if [[ ${#_datasource_specs[@]} -eq 0 ]]; then
+        gsc_log_error "No datasources resolved for provisioning."
+        exit 1
+    fi
+
     for _file in "${_dashboards[@]}"; do
-        case "$_file" in
-            *.json) cp "$_file" "$_dashboard_dir/" ;;
-            *.zip|*.tar.gz|*.tar.xz) extract_archive "$_file" ;;
-            *) gsc_log_error "Unsupported file type: $_file"; exit 1 ;;
-        esac
+        if [[ -d "$_file" ]]; then
+            ingest_dashboard_dir "$_file"
+        else
+            case "$_file" in
+                *.json)              cp "$_file" "$_dashboard_dir/" ;;
+                *.zip|*.tar.gz|*.tar.xz) extract_archive "$_file" ;;
+                *) gsc_log_error "Unsupported file type: $_file"; exit 1 ;;
+            esac
+        fi
     done
 
     cat > "$_provisioning_dir/dashboards/dashboards.yaml" <<EOF
@@ -283,73 +589,122 @@ EOF
     cat > "$_provisioning_dir/datasources/datasource.yaml" <<EOF
 apiVersion: 1
 datasources:
-  - name: Prometheus
-    type: prometheus
-    access: proxy
-    url: $_datasource_url
-    isDefault: true
-    editable: true
 EOF
 
-    cat > docker-compose.yaml <<EOF
-version: '3'
-services:
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "$_grafana_port:3000"
-    volumes:
-      - ./dashboards:/var/lib/grafana/dashboards
-      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=$_admin_password
+    local _spec
+    local _is_first=1
+    for _spec in "${_datasource_specs[@]}"; do
+        local _name="${_spec%%=*}"
+        local _url="${_spec#*=}"
+        local _uid
+        _uid=$(make_datasource_uid "${_name}" "${_url}")
+        local _is_default="false"
+        [[ "${_is_first}" -eq 1 ]] && _is_default="true"
+        cat >> "$_provisioning_dir/datasources/datasource.yaml" <<EOF
+  - name: ${_name}
+    uid: ${_uid}
+    type: prometheus
+    access: proxy
+    url: "${_url}"
+    isDefault: ${_is_default}
+    editable: true
 EOF
+        _is_first=0
+    done
+}
+
+# -------------------------------
+# Poll Grafana health endpoint until ready
+# -------------------------------
+_wait_for_grafana() {
+    local _max_attempts=30 _attempt=0
+    gsc_log_info "Waiting for Grafana to be ready..."
+    while [[ $_attempt -lt $_max_attempts ]]; do
+        if curl -sf "http://localhost:${_grafana_port}/api/health" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+        _attempt=$(( _attempt + 1 ))
+    done
+    return 1
 }
 
 # -------------------------------
 # Launch Grafana
 # -------------------------------
 launch_grafana() {
-    if [[ "$_container_engine" == "docker" ]]; then
-        docker compose up -d 2>>"$_error_log"
-        sleep 5
-        if ! docker ps | grep -q grafana; then
-            gsc_log_error "Docker failed to start Grafana. Cleaning up..."
-            docker compose down 2>>"$_error_log"
-            docker image rm grafana/grafana:latest 2>>"$_error_log"
+    local _engine="${_container_engine}"
+    # :Z for SELinux private relabeling — supported by podman; skip for docker to avoid issues on non-SELinux hosts
+    local _vol_opts=""
+    [[ "${_engine}" == "podman" ]] && _vol_opts=":Z"
+
+    "${_engine}" rm -f "${_container_name}" >/dev/null 2>&1 || true
+
+    gsc_log_info "Launching Grafana container '${_container_name}' on port ${_grafana_port} using ${_engine}."
+    gsc_log_info "Mounting dashboards from: $(pwd)/${_dashboard_dir}"
+    "${_engine}" run -d \
+        --name="${_container_name}" \
+        -p "${_grafana_port}:3000" \
+        -v "$(pwd)/${_dashboard_dir}:/var/lib/grafana/dashboards${_vol_opts}" \
+        -v "$(pwd)/${_provisioning_dir}/dashboards:/etc/grafana/provisioning/dashboards${_vol_opts}" \
+        -v "$(pwd)/${_provisioning_dir}/datasources:/etc/grafana/provisioning/datasources${_vol_opts}" \
+        -e GF_SECURITY_ADMIN_USER=admin \
+        -e "GF_SECURITY_ADMIN_PASSWORD=${_admin_password}" \
+        grafana/grafana:latest || {
+            gsc_log_error "${_engine} run failed for ${_container_name}."
+            "${_engine}" ps -a --format '{{.Names}} {{.Status}}' 2>/dev/null | grep -E "^${_container_name} " || true
             exit 1
-        fi
-    else
-        podman run -d \
-            --name=grafana \
-            --replace \
-            -p "$_grafana_port:3000" \
-            -v "$(pwd)/dashboards:/var/lib/grafana/dashboards:Z" \
-            -v "$(pwd)/provisioning/dashboards:/etc/grafana/provisioning/dashboards:Z" \
-            -v "$(pwd)/provisioning/datasources:/etc/grafana/provisioning/datasources:Z" \
-            -e GF_SECURITY_ADMIN_USER=admin \
-            -e GF_SECURITY_ADMIN_PASSWORD="$_admin_password" \
-            grafana/grafana:latest 2>>"$_error_log"
-        sleep 5
-        if ! podman ps | grep -q grafana; then
-            gsc_log_error "Podman failed to start Grafana. Cleaning up..."
-            podman rm -f grafana 2>>"$_error_log"
-            podman image rm grafana/grafana:latest 2>>"$_error_log"
-            exit 1
-        fi
+        }
+
+    if ! _wait_for_grafana; then
+        gsc_log_error "${_engine} failed to start Grafana. Cleaning up..."
+        "${_engine}" rm -f "${_container_name}" >/dev/null 2>&1 || true
+        "${_engine}" image rm grafana/grafana:latest >/dev/null 2>&1 || true
+        exit 1
     fi
-    gsc_log_ok "Grafana setup complete. Access it at http://localhost:$_grafana_port"
+
+    gsc_log_ok "Grafana running as '${_container_name}'. Access at http://localhost:${_grafana_port}"
 }
 
 
 # -------------------------------
 # Main
 # -------------------------------
-gsc_require_root
 parse_args "$@"
+
+add_default_datasource
+
+if [[ ${#_remove_datasource_names[@]} -gt 0 ]]; then
+    prune_datasources
+fi
+
+if [[ "${_query_mode}" -eq 2 ]]; then
+    if [[ -z "${_container_engine}" && ${#_dashboards[@]} -eq 0 && -z "${_url}" && -z "${_git_repo}" ]]; then
+        grafana_api_list_datasources
+    else
+        list_datasources
+    fi
+    exit 0
+fi
+
+if [[ "${_grafana_crud_mode}" -eq 1 && "${_container_engine}" == "" && "${#_dashboards[@]}" -eq 0 && -z "${_url}" && -z "${_git_repo}" ]]; then
+    if [[ ${#_remove_datasource_names[@]} -gt 0 ]]; then
+        grafana_api_remove_datasource
+    fi
+    if [[ ${#_datasource_specs[@]} -gt 0 ]]; then
+        grafana_api_add_datasource
+    fi
+    exit 0
+fi
+
+if [[ "${_cleanup_volumes}" -eq 1 && "${_cleanup_mode}" -eq 0 ]]; then
+    gsc_log_error "--volume requires --cleanup"
+    print_usage
+fi
+
+[[ "${_container_engine}" == "docker" ]] && gsc_require_root
+
+_container_name="$(resolve_container_name)"
 
 if [[ "$_cleanup_mode" -eq 1 ]]; then
     cleanup_grafana
@@ -359,11 +714,14 @@ fi
 [[ "$_query_mode" -eq 1 ]] && query_prometheus_sources
 download_url
 clone_git_repo
-[[ -z "$_container_engine" ]] && gsc_log_error "Must specify --docker or --podman" && print_usage
+
+[[ -z "$_container_engine" ]] && gsc_log_error "Must specify --docker or --podman" && print_usage 1
 if [[ $_update_dashboards -eq 0 && ${#_dashboards[@]} -eq 0 ]]; then
     gsc_log_error "At least one dashboard file must be specified with -D, --url, or --git (or use --update to use existing ones)"
-    print_usage
+    print_usage 1
 fi
+
+gsc_require "${_container_engine}" curl
 validate_dashboards
 prepare_structure
 launch_grafana

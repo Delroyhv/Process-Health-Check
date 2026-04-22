@@ -5,7 +5,7 @@
 #
 # It collects various metrics from the HCP for Cloud Scale system.
 #
-SCRIPT_VERSION="0.0.1"
+SCRIPT_VERSION="1.4.2"
 ##############################
 #
 # DEFAULT PARAMETERS:
@@ -113,6 +113,15 @@ oldest_date_epoch=0  # Prometheus oldest date - epoch time
 # Check the input parameters:
 #
 function getOptions() {
+    local _arg
+    for _arg in "$@"; do
+        case "${_arg}" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+        esac
+    done
     while getopts "c:d:v:f:o:p:e:i:n:q:m:t:u:s:bwh" opt; do
         case $opt in
             c)  PROM_NAME=${OPTARG}
@@ -802,4 +811,3 @@ fi
 script_end_time=$(date -u +%s)
 ((script_run_seconds=script_end_time-current_time_epoch))
 display "Total run time: ${script_run_seconds} sec"
-

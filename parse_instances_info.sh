@@ -54,6 +54,14 @@ ${_this_filename} :
 # Check the input parameters:
 #
 getOptions() {
+    for _arg in "$@"; do
+        case "${_arg}" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+        esac
+    done
     while getopts "f:d:s:o:vh" _opt; do
         case "${_opt}" in
             f)  _input_file="${OPTARG}"

@@ -27,7 +27,7 @@
 /test_*.sh
 /test_*.go
 /mock_curl.sh
-/CLAUDE.md
+/CODE.md
 
 # Go source dirs (binaries ship pre-built in root)
 /hcpcs_db

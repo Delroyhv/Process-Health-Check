@@ -33,6 +33,11 @@ ${_this_filename} :
 "
 }
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
 ####################### INITIALIZATION ###############
 #
 # Get input options

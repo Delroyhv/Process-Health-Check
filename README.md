@@ -2,7 +2,7 @@
 
 A health check and monitoring toolkit for **HCP Cloud Scale** (Hitachi Vantara) clusters. Processes support logs and Prometheus snapshots to surface errors, warnings, memory anomalies, and partition issues.
 
-**Current version:** v1.3.4
+**Current version:** v1.4.3
 
 ---
 
@@ -19,6 +19,20 @@ A health check and monitoring toolkit for **HCP Cloud Scale** (Hitachi Vantara) 
 | `sudo` | Required for `gsc_prometheus.sh` and cleanup operations |
 
 Run `./selfcheck.sh` to validate all dependencies and required files before use.
+
+## Testing
+
+Run the repository regression suite with:
+
+```bash
+make test
+```
+
+This runs:
+- `./test_partition_growth.sh`
+- `./test_chk_alerts.sh`
+- `./test_gsc_grafana_ingest.sh`
+- `cd hcpcs_alertengine && go test ./...`
 
 ---
 
@@ -91,11 +105,11 @@ sudo ./gsc_prometheus.sh \
 | `-f` | Path to `.tar.xz` snapshot file |
 | `-b` | Base directory for extraction |
 | `--replace` | Remove and replace an existing container of the same name |
-| `--engine auto\|docker\|podman` | Container engine (default: auto) |
+| `--engine auto\|docker\|podman\|query` | Container engine (default: auto); `query` detects and reports installed engines without requiring root |
 | `--image IMAGE` | Prometheus image (default: `docker.io/prom/prometheus:latest`) |
 | `--keep-container` | Do not use `--rm`; leave container after exit |
 | `--min-port N` | Minimum port (default: `9090`) |
-| `--max-port N` | Maximum port (default: `9599`) |
+| `--max-port N` | Maximum port (default: `9999`) |
 | `--exclude-port N` | Additional port(s) to exclude (repeatable) |
 | `--concurrent` | Enable file locking for concurrent port selection (120s timeout) |
 | `--debug` | Enable verbose logging |
@@ -128,17 +142,30 @@ sudo ./gsc_grafana.sh \
 |------|-------------|
 | `-d`, `--docker` | Use Docker as the container engine |
 | `-p`, `--podman` | Use Podman as the container engine |
-| `-D`, `--dashboard FILE` | Path to dashboard JSON or `.zip` archive |
+| `-D`, `--dashboard FILE\|DIR` | Path to dashboard JSON file, directory of JSONs, or `.zip`/`.tar.gz` archive |
 | `--url URL` | Download dashboards from a URL |
 | `--git URL` | Clone a Git repository containing dashboards |
 | `-i`, `--prometheus-data-source IP:PORT` | Specify the Prometheus datasource address |
+| `--datasource NAME=URL` | Add a datasource entry to provisioning (repeatable) |
+| `--remove-datasource NAME` | Remove a datasource entry from provisioning (repeatable) |
+| `--list-datasources` | Print the resolved datasource list and exit |
+| `--grafana-server HOST:PORT` | Target a specific Grafana API endpoint for datasource CRUD/list operations |
 | `-g`, `--grafana-port PORT` | Specify the Grafana port (default: 3000) |
 | `--admin-password PASSWORD` | Specify the Grafana admin password (default: admin) |
 | `--update` | Update configuration without clearing existing dashboards |
 | `--query` | Interactive scan for Prometheus sources to set datasource |
 | `--cleanup` | Stop and remove the Grafana container |
+| `--increment` | Auto-increment the Grafana container name when a matching container already exists |
 | `--volume` | Delete dashboards and provisioning directories during cleanup (requires `--cleanup`) |
 | `--override=y` | Skip confirmation prompts for cleanup |
+
+Notes:
+  - When `-D` points at a directory, `gsc_grafana.sh` copies any dashboard `*.json` files it finds and extracts any dashboard archives (`*.zip`, `*.tar.gz`, `*.tar.xz`) found inside that directory tree.
+  - When `-D dashboards` is used, the directory is preserved and re-used as the Grafana staging directory.
+  - `--increment` is useful when you want to run multiple Grafana instances with the same customer/SR pair without container-name collisions.
+  - `--datasource` can be repeated to add extra provisioning entries; `--remove-datasource` removes one by name before provisioning.
+  - `--list-datasources` prints the final resolved datasource list and its Grafana `uid` values, then exits without starting Grafana.
+  - `--grafana-server` changes the Grafana endpoint used by datasource CRUD/list operations.
 
 Grafana is accessible at `http://localhost:3000` (or your custom port) (admin/admin). Provisioned data sources are set to `editable: true`.
 

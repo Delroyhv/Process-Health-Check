@@ -15,6 +15,12 @@ IFS=$'\n\t'
 # Usage: chk_service_placement.sh [health_check_dir] [services_info_log]
 #
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: chk_service_placement.sh [health_check_dir] [services_info_log]"
+    echo "  -h, --help   Show this help message"
+    exit 0
+fi
+
 _health_check_dir="${1:-.}"
 _input_file="${2:-hcpcs_services_info.log}"
 _output_file="health_report_service_placement.log"

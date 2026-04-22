@@ -65,8 +65,8 @@ parse_args() {
       *) gsc_log_error "Unknown argument: $1"; usage; exit 1 ;;
     esac
   done
-  [[ -n "${_customer}" ]] || gsc_die "Customer name (-c) is mandatory."
-  [[ -n "${_sr_number}" ]] || gsc_die "SR number (-s) is mandatory."
+  _customer=$(gsc_require_arg "-c/--customer" "customer name" "${_customer}")
+  _sr_number=$(gsc_require_arg "-s/--sr" "service request number" "${_sr_number}")
 }
 
 do_cleanup() {
@@ -96,7 +96,7 @@ do_cleanup() {
 
   if [[ -n "${_target_dir}" && -d "${_target_dir}" ]]; then
     if [[ "${_override_confirm}" != "y" ]]; then
-        read -p "REALLY remove directory ${_target_dir}? (y/N): " _ans
+        read -rp "REALLY remove directory ${_target_dir}? (y/N): " _ans
         [[ "${_ans,,}" != "y" ]] && gsc_die "Directory removal cancelled."
     fi
     gsc_log_info "Removing directory (with gsc_sudo): ${_target_dir}"

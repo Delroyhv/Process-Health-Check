@@ -1,3 +1,56 @@
+## v1.4.3
+- gsc_grafana.sh: Add datasource CRUD/list support against a specific Grafana API endpoint with stable Grafana `uid` handling. Datasource add/remove/list now supports `--grafana-server`, `--grafana-user`, and `--grafana-token`, and remove can match by datasource name or `uid`.
+- gsc_grafana.sh: Add `--cleanup` and `--increment`, improve `-D` dashboard ingestion for directories and archives, and make the help path available without requiring root.
+- gsc_grafana.sh, gsc_prometheus.sh, gsc_airgap.sh: Normalize help handling so `-h|--help` works without root or other privileged prechecks.
+- Helper scripts: Normalize legacy `usage()` handling across the repo so `-h|--help` exits cleanly for the remaining check and parser scripts.
+- gsc_core.sh: Harden size parsing to accept fractional inputs safely.
+- test_concurrency.sh: Fix background PID tracking and update Grafana port/container-path handling for concurrent runs.
+- Add regression coverage for `partition_growth`, `chk_alerts`, Grafana dashboard ingestion, Grafana datasource CRUD/listing, and `hcpcs_alertengine`; wire the new tests into `make test` and the `hcpcs_alertengine` Makefile.
+- Update `README.md`, `CODE.md`, and script help text to document the new Grafana and test workflows.
+
+## Unreleased
+
+## v1.4.2
+- gsc_prometheus.sh: Log directory changed from version-stamped path (`/var/log/gsc_prometheus/v<version>/`) to static `/var/log/gsc_prometheus/hcpcs/` — `last_used_port.txt` now persists across releases without relocation.
+- All scripts: Sync `_script_version` / `SCRIPT_VERSION` to match project `VERSION` file (`v1.4.1` → `v1.4.2`). Affected: `gsc_prometheus.sh`, `gsc_airgap.sh`, `expand_hcpcs_support.sh`, `chk_metrics.sh`, `chk_collected_metrics.sh`, `collect_metrics.sh`.
+
+### SHA256
+```
+52f2c7652c4b7c3eedb6482703d8015358f52a9296952ea9e5cf1fa1f4eb312f  process_health_v1.4.2.tar.xz
+```
+
+## v1.4.1
+- gsc_core.sh: Add `gsc_require_arg()` — validates required CLI arguments are non-empty. Interactive mode re-prompts until a valid value is entered; non-interactive (CI/pipe) exits immediately with a clear `[ERROR]` message. Usage: `_var=$(gsc_require_arg "--flag" "description" "${_var}")`.
+- gsc_prometheus.sh: Replace single "Missing required arguments" die with per-flag `gsc_require_arg` calls for `-c`, `-s`, `-f`, `-b` so the user is told exactly which argument is missing and prompted to enter it.
+- gsc_healthcheck.sh: Same — `-c` and `-s` now use `gsc_require_arg` instead of bare `gsc_die`.
+- gsc_prometheus.sh: Increase default `--max-port` from `9200` to `9999` (wider auto-select range).
+- Security: `chmod -R 0777` on Prometheus data dir replaced with chown-first then `chmod -R 0755` in both `gsc_prometheus.sh` and `gsc_airgap.sh` — eliminates world-writable window.
+- gsc_grafana.sh, gsc_healthcheck_report.sh: Add explicit `set -euo pipefail` + `IFS=$'\n\t'` after shebang.
+- gsc_core.sh: Add `gsc_add_tmp_file()` + `_gsc_tmp_files` array; `gsc_cleanup()` now removes individual temp files as well as directories. Replace bare `echo` with `gsc_log_warn`/`gsc_log_info` in cleanup confirmation. Fix `read -p` → `read -rp` (SC2162).
+- gsc_healthcheck.sh: Fix `read -p` → `read -rp`.
+- runchk.sh: Register mktemp output file with `gsc_add_tmp_file` for cleanup on exit.
+- README.md: Fix `--engine` missing `query` option; correct `--max-port` default; update `-D` description to `FILE|DIR`.
+
+### SHA256
+```
+ca28e515abe3e7ffb75fc6d4d82ee4b1ff8b4a381ec8b4209b9d9ef346e10f8a  process_health_v1.4.1.tar.xz
+```
+
+## v1.4.0
+- gsc_grafana.sh: Major refactor — unified container launch via direct `docker run`/`podman run` (removes docker-compose dependency). Named containers `gsc_grafana_<customer>_<sr>` for multi-instance safety. Directory input support for `-D` (copies all `.json` from dir). `_wait_for_grafana()` health poll replaces fixed `sleep 5`. MIME-type detection for URL downloads without recognised extension. Proper `mktemp -d` + `gsc_add_tmp_dir` for URL/git temp dirs. `--volume` requires `--cleanup` guard. Root only required for docker. Default datasource changed from `http://prometheus:9090` to `http://127.0.0.1:9090`.
+- gsc_prometheus.sh: Fix `_min_port`/`_max_port` ignored in port selection — both random and sequential fallback now use configured range. Fix `command -v` → `declare -f` for bash function detection. Fix lock file hardcoded `/tmp` → `${TMPDIR:-/tmp}`. Add `--volume` requires `--cleanup` guard. Validate selected engine with `gsc_require` after `--engine` switch. Add `--engine query` — detects and reports installed docker/podman with path and version; runs without root.
+- gsc_core.sh: Shellcheck SC2155 fixes — split `local _var=$(...)` into separate declare + assign in `gsc_vault_encrypt`, `gsc_vault_decrypt`, `gsc_compare_value`, `gsc_pretty_bytes`, `gsc_check_extract_space`, `gsc_print_space_estimate`. Rename `gsc_arithmetic()` locals `_v1/_v2/_op` → `_arith_a/_arith_b/_arith_op` to avoid masking outer scope vars; replace `echo $((...))` with explicit `case` per operator.
+- chk_filesystem.sh: Rename `_missing` → `_missing_mounts` to avoid variable shadowing.
+- selfcheck.sh: Rename `_missing` → `_missing_files` to avoid variable shadowing.
+- print_node_memory_summary.sh: Fix `${fn "arg"}` → `$(fn "arg")` command substitution in swap warning messages.
+- runchk.sh: Fix array subscript `_chk_metrics_args[$_ci]` → `_chk_metrics_args[_ci]`.
+- dashboards: Replace Dashboard 9 (LP variant) with Dashboard 6 (Services Health).
+
+### SHA256
+```
+2d6966dc3ade3e069fca6a5dd07a9f717f1616b68247ab72f185209f968fbdf7  process_health_v1.4.0.tar.xz
+```
+
 ## v1.3.4
 - runchk.sh: Always print quarterly partition growth to screen — removed guard that suppressed it when `--report` was set.
 - test_battery.sh: Add `--chart yearly,quarterly,monthly` to both `gsc_healthcheck_report.sh` calls so Growth Trends section is included in generated reports.
@@ -52,7 +105,7 @@ e2d8f2d623de1311ec59d86ba5c63cf23fe70ce8e171b1705679a3f5f3657644  process_health
 - expand_hcpcs_support.sh: Fix `xz -d -9` → `xz -d -T0`. The `-9` compression-level flag is silently ignored during decompression; `-T0` enables multi-threaded decompression (parallelism realized when source archive has multiple xz blocks).
 - test_battery.sh: Integrate `HCPCS_DB` / `HCPCS_CUSTOMER` env vars into runchk.sh Step D calls to record results in hcpcs_db. Fix Step E to call `gsc_healthcheck_report.sh` directly instead of re-running all 20+ check scripts via `runchk.sh --report`. Fix `_HCPCS_DB` default path to use `${HOME}` instead of hardcoded user path.
 - test_concurrency.go: Add `context.WithTimeout` (10 min per goroutine) so hung Prometheus calls are cancelled automatically. Add error checking on setup/cleanup commands. Remove stale sed-based seeding workaround (fix is now in gsc_prometheus.sh source).
-- CLAUDE.md: Add coding conventions (variable naming, inline comments, modularity), Version Bump Rules section, and clarify Release Process step 1.
+- CODE.md: Add coding conventions (variable naming, inline comments, modularity), Version Bump Rules section, and clarify Release Process step 1.
 
 ### SHA256
 ```
@@ -100,7 +153,7 @@ e2d8f2d623de1311ec59d86ba5c63cf23fe70ce8e171b1705679a3f5f3657644  process_health
 ```
 
 ## v1.2.68
-- hcpcs_db: Add `serve` subcommand — JSON-RPC 2.0 MCP stdio server exposing four tools: `list_runs`, `show_run`, `trend_sr`, `record_run`. Refactored `cmdList/Show/Trend/Record` to use `io.Writer` helpers so CLI and MCP paths share the same query logic. Registered in `~/.claude/settings.json` as an MCP server and as a `/hcpcs-db` Claude Code skill.
+- hcpcs_db: Add `serve` subcommand — JSON-RPC 2.0 MCP stdio server exposing four tools: `list_runs`, `show_run`, `trend_sr`, `record_run`. Refactored `cmdList/Show/Trend/Record` to use `io.Writer` helpers so CLI and MCP paths share the same query logic. Registered as an MCP server and as a `/hcpcs-db` database skill.
 - chk_partition_sizes: New Go binary (`chk_partition_sizes/`) that reads `partitionSize` from all `clusterPartitionState_Metadata-Coordination_*.json` files, deduplicates by partition ID, sorts descending, writes a flat tab-separated file, and emits `[WARNING]` if the largest partition ≥ 1.5× the split threshold. Threshold accepts unit suffixes (Gi/G/Mi/M/Ki/K, all binary). Shell wrapper `chk_partition_sizes.sh` dispatches the binary with platform detection and falls back to jq.
 - chk_cluster.sh: Add minimum CS product version check. Sources `cs_version.conf` (`_cs_version=2.1.65`); emits `[WARNING]` when the detected version is below the minimum.
 - chk_docker.sh: Add minimum Docker version check. Sources `docker_version.conf` (`_minimum_version=20.10.5`); emits `[WARNING]` when the detected Docker version is below the minimum.
@@ -196,7 +249,7 @@ c8e8290c26565d68dde5f877bcd437c6fa3bfa78afa330d43326f815cb64184d  process_health
 - gsc_healthcheck.sh: Fix `mktemp` failure on systems where `/tmp` is not writable. Changed from `mktemp` (file in TMPDIR) to `mktemp -d` (unique subdir); register only the subdir with `gsc_add_tmp_dir`, not the parent TMPDIR, preventing subsequent SR runs from failing when cleanup wipes the base temp directory.
 - gsc_healthcheck_report.sh: Fix `_count_severity` arithmetic error — `grep -c` exits 1 on no match; using `|| echo 0` produced `"0\n0"` which broke `$(( ... ))`. Changed to `|| true`.
 - test_battery.sh: New full-sequence battery integration test — deploys repo, runs global Prometheus cleanup, then for each SR: expand → find run dir → find psnap → start Prometheus → runchk → runchk --report. Supports optional SR filter arguments. Logs per-SR and per-run.
-- Makefile: Exclude `test_*.sh`, `test_*.go`, `mock_curl.sh`, and `CLAUDE.md` from the release bundle.
+- Makefile: Exclude `test_*.sh`, `test_*.go`, `mock_curl.sh`, and `CODE.md` from the release bundle.
 - docs: Standardise all examples to customer `ACME`, SR `17762026`.
 
 ### SHA256

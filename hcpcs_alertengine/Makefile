@@ -11,6 +11,9 @@ PLATFORMS := \
 all: $(PLATFORMS)
 	@echo "Cross-compilation complete."
 
+test:
+	@go test ./...
+
 $(PLATFORMS):
 	@GOOS=$(word 1,$(subst /, ,$@)) \
 	GOARCH=$(word 2,$(subst /, ,$@)) \

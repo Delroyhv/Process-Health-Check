@@ -20,7 +20,7 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-_script_version="1.0.0"
+_script_version="1.4.2"
 _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ Prometheus options (required for --start):
 Grafana options (optional for --start):
   -D, --dashboard FILE         Dashboard JSON or archive (repeatable; .json/.zip/.tar.gz/.tar.xz)
   -g, --grafana-port PORT      Grafana listen port (default: ${_grafana_port})
-  -i, --datasource IP:PORT     Prometheus datasource address (default: auto from prom port)
+  -i, --datasource IP:PORT     Prometheus datasource address (alias: --prometheus-data-source; default: auto from prom port)
   --admin-password PASSWORD    Grafana admin password (default: ${_admin_password})
 
 Image options:
@@ -387,10 +387,10 @@ scrape_configs:
       - targets: ['localhost:9090']
 EOPROM
 
-  # Prometheus runs as UID 65534 (nobody); set permissions so it can write WAL
+  # Prometheus runs as UID 65534 (nobody); chown first then restrict to owner-rwx
   gsc_log_info "Setting data directory permissions..."
-  chmod -R 0777 "${_data_dir}" || true
   chown -R 65534:65534 "${_data_dir}" 2>/dev/null || true
+  chmod -R 0755 "${_data_dir}" || true
 
   if [[ "${_replace}" -eq 1 ]]; then
     gsc_container_rm_if_exists "${_runtime}" "${_name}"
@@ -606,6 +606,16 @@ _resolve_engine() {
 # Argument parsing and entry point
 # ---------------------------------------------------------------------------
 _main() {
+  local _a
+  for _a in "$@"; do
+    case "${_a}" in
+      -h|--help)
+        _usage
+        return 0
+        ;;
+    esac
+  done
+
   gsc_require_root
 
   while [[ $# -gt 0 ]]; do

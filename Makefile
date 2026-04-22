@@ -5,13 +5,18 @@ VERSION := $(shell cat VERSION 2>/dev/null | tr -d '[:space:]')
 BUNDLE_NAME ?= process_health_$(VERSION)
 OUT ?= $(BUNDLE_NAME).tar.xz
 
-.PHONY: bundle lint bash-n docs readme
+.PHONY: bundle lint bash-n docs readme test
 
 readme:
 	@sed -i 's/^\*\*Current version:\*\* .*/\*\*Current version:\*\* $(VERSION)/' README.md
 	@echo "README.md updated to version $(VERSION)"
 
 bundle: readme
+	@echo "Archiving previous release bundles and SHA256s..."
+	@mkdir -p archive
+	@for f in process_health_v*.tar.xz process_health_v*.sha256 SHA256SUMS; do \
+	  [ -f "$$f" ] && mv -v "$$f" archive/ || true; \
+	done
 	@echo "Creating $(OUT)"
 	@if command -v go >/dev/null 2>&1; then \
 	  echo "Building gsc_calc..."; \
@@ -26,7 +31,6 @@ bundle: readme
 	  --exclude='*.tar.xz' \
 	  --exclude='*.xz' \
 	  --exclude='*.sha256' \
-	  --exclude='./.' \
 	  --exclude='./2026*' \
 	  --exclude='./supportLogs*' \
 	  --exclude='*.log' \
@@ -35,7 +39,7 @@ bundle: readme
 	  --exclude='./test_*.sh' \
 	  --exclude='./test_*.go' \
 	  --exclude='./mock_curl.sh' \
-	  --exclude='./CLAUDE.md' \
+	  --exclude='./CODE.md' \
 	  --exclude='./collect_metrics.sh' \
 	  --exclude='./chk_collected_metrics.sh' \
 	  --exclude='./hcpcs_db' \
@@ -71,3 +75,11 @@ lint:
 	else \
 	  echo "shellcheck not installed"; \
 	fi
+
+test:
+	@echo "Running repository regression checks"
+	@./test_partition_growth.sh
+	@./test_chk_alerts.sh
+	@./test_gsc_grafana_ingest.sh
+	@./test_gsc_grafana_datasources.sh
+	@cd hcpcs_alertengine && go test ./...

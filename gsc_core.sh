@@ -44,6 +44,27 @@ gsc_require_root() {
   fi
 }
 
+gsc_require_arg() {
+  # Validates a required CLI argument is non-empty.
+  # Interactive: prompts until a non-blank value is entered.
+  # Non-interactive (CI/pipe): dies immediately with a clear error.
+  # Usage: _var=$(gsc_require_arg "--flag" "human description" "${_var}")
+  local _flag="$1" _desc="$2" _val="$3"
+  if [[ -n "${_val// /}" ]]; then
+    printf '%s\n' "${_val}"
+    return 0
+  fi
+  if [[ ! -t 0 ]]; then
+    gsc_log_error "${_flag} requires a non-blank value: ${_desc}"
+    exit 1
+  fi
+  while [[ -z "${_val// /}" ]]; do
+    gsc_log_warn "${_flag} is required — ${_desc} cannot be blank"
+    read -rp "  Enter ${_desc}: " _val
+  done
+  printf '%s\n' "${_val}"
+}
+
 # -----------------------------
 # Logging
 # -----------------------------
@@ -335,9 +356,12 @@ gsc_truncate_log() {
 # Temporary directory management
 # -----------------------------
 _gsc_tmp_dirs=()
-gsc_add_tmp_dir() { [[ -d "$1" ]] && _gsc_tmp_dirs+=("$1"); }
+_gsc_tmp_files=()
+gsc_add_tmp_dir()  { [[ -d "$1" ]] && _gsc_tmp_dirs+=("$1"); }
+gsc_add_tmp_file() { [[ -n "$1" ]] && _gsc_tmp_files+=("$1"); }
 gsc_cleanup() {
-  for _d in "${_gsc_tmp_dirs[@]:-}"; do rm -rf -- "${_d}" 2>/dev/null || true; done
+  for _d in "${_gsc_tmp_dirs[@]:-}";  do rm -rf -- "${_d}" 2>/dev/null || true; done
+  for _f in "${_gsc_tmp_files[@]:-}"; do rm -f  -- "${_f}" 2>/dev/null || true; done
   _GSC_SUDO_PASS_VAULTED=""
 }
 
@@ -347,12 +371,14 @@ gsc_cleanup() {
 _GSC_SUDO_PASS_VAULTED=""
 
 gsc_vault_encrypt() {
-  local _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
+  local _bin
+  _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
   if [[ -x "${_bin}" ]]; then "${_bin}" -op encrypt "$1"; else echo "$1"; fi
 }
 
 gsc_vault_decrypt() {
-  local _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
+  local _bin
+  _bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gsc_vault"
   if [[ -x "${_bin}" ]]; then "${_bin}" -op decrypt "$1"; else echo "$1"; fi
 }
 
@@ -395,12 +421,12 @@ gsc_container_cleanup() {
   fi
 
   if [[ "${_override}" != "y" ]]; then
-    echo "WARNING: This will stop and remove the following containers:"
-    echo "${_containers}"
-    [[ "${_volumes}" -eq 1 ]] && echo "And DELETE their associated data directories."
+    gsc_log_warn "This will stop and remove the following containers:"
+    gsc_log_info "${_containers}"
+    [[ "${_volumes}" -eq 1 ]] && gsc_log_warn "And DELETE their associated data directories."
 
     local _ans
-    read -p "Are you sure? (y/N): " _ans
+    read -rp "Are you sure? (y/N): " _ans
     [[ "${_ans,,}" != "y" ]] && gsc_die "Cleanup cancelled."
   fi
 
@@ -459,7 +485,8 @@ gsc_compare_value() {
     esac
   fi
   if command -v bc >/dev/null 2>&1; then
-    local _res=$(echo "if (${_val} ${_op} ${_lim}) 1 else 0" | bc 2>/dev/null)
+    local _res
+    _res=$(echo "if (${_val} ${_op} ${_lim}) 1 else 0" | bc 2>/dev/null)
     [[ "${_res}" == "1" ]] && { printf '%s\n' "${_val} ${_op} ${_lim}"; return 0; }
     return 1
   fi
@@ -467,12 +494,19 @@ gsc_compare_value() {
 }
 
 gsc_arithmetic() {
-  local _v1="$1" _op="$2" _v2="$3"
-  if [[ "${_v1}" =~ ^-?[0-9]+$ ]] && [[ "${_v2}" =~ ^-?[0-9]+$ ]] && [[ "${_op}" =~ ^[+\-*/%]$ ]]; then
-    [[ ("${_op}" == "/" || "${_op}" == "%") && "${_v2}" == "0" ]] && return 1
-    echo $(( _v1 ${_op} _v2 )); return 0
+  local _arith_a="$1" _arith_op="$2" _arith_b="$3"
+  if [[ "${_arith_a}" =~ ^-?[0-9]+$ ]] && [[ "${_arith_b}" =~ ^-?[0-9]+$ ]] && [[ "${_arith_op}" =~ ^[+\-*/%]$ ]]; then
+    [[ ("${_arith_op}" == "/" || "${_arith_op}" == "%") && "${_arith_b}" == "0" ]] && return 1
+    case "${_arith_op}" in
+      '+') echo $(( _arith_a + _arith_b )) ;;
+      '-') echo $(( _arith_a - _arith_b )) ;;
+      '*') echo $(( _arith_a * _arith_b )) ;;
+      '/') echo $(( _arith_a / _arith_b )) ;;
+      '%') echo $(( _arith_a % _arith_b )) ;;
+    esac
+    return 0
   fi
-  if command -v bc >/dev/null 2>&1; then echo "scale=2; ${_v1} ${_op} ${_v2}" | bc 2>/dev/null && return 0; fi
+  if command -v bc >/dev/null 2>&1; then echo "scale=2; ${_arith_a} ${_arith_op} ${_arith_b}" | bc 2>/dev/null && return 0; fi
   return 1
 }
 
@@ -488,7 +522,8 @@ gsc_pretty_bytes() {
   for ((i=0; i<${#_units[@]}; i++)); do
     if (( _bytes < 1024**($i+1) )); then _scale=$((1024**$i)); break; fi
   done
-  local _val=$(echo "scale=1; ${_bytes} / ${_scale}" | bc)
+  local _val
+  _val=$(echo "scale=1; ${_bytes} / ${_scale}" | bc)
   echo "${_val}${_units[$i]}" | sed 's/\.0//'
 }
 
@@ -496,25 +531,44 @@ gsc_pretty_bytes() {
 # Raw numbers: >2000000 assumed KB (large KiB value), else assumed MB.
 gsc_to_kb() {
     local _size="$1"
-    local _value _unit
-    if [[ "${_size}" =~ ([0-9.]+)([KMGTPEZY]?B?) ]]; then
+    local _value="" _unit="" _kb=""
+
+    if [[ "${_size}" =~ ^([0-9]+([.][0-9]+)?)([KMGTPEZY]?B?)$ ]]; then
         _value="${BASH_REMATCH[1]}"
-        _unit="${BASH_REMATCH[2]}"
-    elif [[ "${_size}" =~ ([0-9.]+) ]]; then
+        _unit="${BASH_REMATCH[3]}"
+    elif [[ "${_size}" =~ ^([0-9]+([.][0-9]+)?)$ ]]; then
         _value="${BASH_REMATCH[1]}"
-        if (( $(echo "$_value > 2000000" | bc -l) )); then
+        if command -v bc >/dev/null 2>&1 && [[ "$(echo "${_value} > 2000000" | bc -l)" == "1" ]]; then
             _unit="KB"
         else
             _unit="MB"
         fi
+    else
+        echo "0"
+        return 0
     fi
+
     case "${_unit}" in
-        "KB"|"K"|"") echo "$_value" ;;
-        "MB"|"M") echo "$((_value * 1024))" ;;
-        "GB"|"G") echo "$((_value * 1024 * 1024))" ;;
-        "TB"|"T") echo "$((_value * 1024 * 1024 * 1024))" ;;
-        *) echo "0" ;;
+        "KB"|"K"|"")
+            _kb="${_value}"
+            ;;
+        "MB"|"M")
+            _kb="$(echo "${_value} * 1024" | bc -l)"
+            ;;
+        "GB"|"G")
+            _kb="$(echo "${_value} * 1024 * 1024" | bc -l)"
+            ;;
+        "TB"|"T")
+            _kb="$(echo "${_value} * 1024 * 1024 * 1024" | bc -l)"
+            ;;
+        *)
+            echo "0"
+            return 0
+            ;;
     esac
+
+    # Return an integer KB value; callers expect a shell-friendly whole number.
+    printf '%s\n' "${_kb%.*}"
 }
 
 # -----------------------------
@@ -580,8 +634,9 @@ gsc_estimate_uncompressed_size() {
 
 gsc_check_extract_space() {
   local _archive="$1" _target_dir="$2" _warn_pct="${3:-10}" _fail_pct="${4:-5}"
-  local _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 0
-  local _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 0
+  local _size _df_line
+  _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 0
+  _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 0
   read -r _dev _total _used _avail _use _mnt <<<"${_df_line}"
   local _free_after=$((_avail - _size))
   if (( _free_after < 0 )); then gsc_log_error "Not enough space"; return 2; fi
@@ -591,8 +646,9 @@ gsc_check_extract_space() {
 
 gsc_print_space_estimate() {
   local _archive="$1" _target_dir="$2"
-  local _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 1
-  local _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 1
+  local _size _df_line
+  _size=$(gsc_estimate_uncompressed_size "${_archive}") || return 1
+  _df_line=$(df -P -B1 -- "${_target_dir}" 2>/dev/null | awk 'NR==2') || return 1
   read -r _dev _total _used _avail _use _mnt <<<"${_df_line}"
   local _pct=$(( 100 * (_avail - _size) / _total ))
   gsc_log_info "Estimate for ${_archive}: size≈$((_size/1048576)) MiB, free_after≈~${_pct}%."

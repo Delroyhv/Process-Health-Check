@@ -132,7 +132,7 @@ print_node_memory_summary() {
     for mem in "${!node_memory_total[@]}"; do
         nodes="${memory_groups[$mem]}"
         count=$(echo "$nodes" | wc -w)
-        gsc_log_info "  - ${count} node(s) with ${mem}KB (${gsc_pretty_bytes "$((mem * 1024))"}) RAM: ${nodes}"
+        gsc_log_info "  - ${count} node(s) with ${mem}KB ($(gsc_pretty_bytes "$((mem * 1024))")) RAM: ${nodes}"
     done
 
     # ── Section 2: Runtime memory pressure (free) ────────────────────────────────
@@ -206,10 +206,10 @@ print_node_memory_summary() {
 
         if (( used_swap_kb > 0 )); then
             if (( swap_used_percent > _MEM_SWAP_CRIT )); then
-                gsc_loga "CRITICAL: $node: swap ${gsc_pretty_bytes "$((used_swap_kb * 1024))"} in use (${swap_used_percent}% of swap) — severe swap thrashing; performance likely degraded"
+                gsc_loga "CRITICAL: $node: swap $(gsc_pretty_bytes "$((used_swap_kb * 1024))") in use (${swap_used_percent}% of swap) — severe swap thrashing; performance likely degraded"
                 _err=1
             else
-                gsc_loga "WARNING: $node: swap ${gsc_pretty_bytes "$((used_swap_kb * 1024))"} in use (${swap_used_percent}% of swap) — memory pressure; latency impact"
+                gsc_loga "WARNING: $node: swap $(gsc_pretty_bytes "$((used_swap_kb * 1024))") in use (${swap_used_percent}% of swap) — memory pressure; latency impact"
                 _err=1
             fi
         fi

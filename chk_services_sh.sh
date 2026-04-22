@@ -74,6 +74,10 @@ _verbose=""
 # Check the input parameters:
 #
 getOptions() {
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
     local _opt
     while getopts "d:r:b:v:o:h" _opt; do
         case ${_opt} in

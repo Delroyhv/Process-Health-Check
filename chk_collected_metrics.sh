@@ -10,7 +10,7 @@ _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "${_script_dir}/gsc_core.sh"
 
-_script_version="0.0.1"
+_script_version="1.4.2"
 ##############################
 #
 # DEFAULT PARAMETERS:
@@ -79,6 +79,14 @@ _oldest_date_epoch=0  # Prometheus oldest date - epoch time
 #
 getOptions() {
     local _opt
+    for _arg in "$@"; do
+        case "${_arg}" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+        esac
+    done
     while getopts "c:v:f:q:o:bwh" _opt; do
         case ${_opt} in
             c)  _collected_telemetry_file=${OPTARG}

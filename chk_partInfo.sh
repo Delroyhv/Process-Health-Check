@@ -51,6 +51,10 @@ ${_this_filename} :
 #
 getOptions() {
     local _opt
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
     while getopts "d:o:vh" _opt; do
         case ${_opt} in
             d)  _log_dir=${OPTARG}
