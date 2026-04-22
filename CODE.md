@@ -1,6 +1,6 @@
 # CODE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance for working with code in this repository.
 
 ## Project Overview
 
@@ -118,12 +118,12 @@ Commands:
 - `list [--limit N] [--sr SR]` — Aligned table: ID, Timestamp, SR, Customer, Version, Nodes, Elapsed, CRIT/DANG/ERR/WARN/ACT.
 - `show <id>` — Group issues by severity with `── SEVERITY ──` headers.
 - `trend <sr>` — Per-run row for one SR with ↑/↓/→ trend arrows vs previous run.
-- `serve [--db PATH]` — MCP stdio server (JSON-RPC 2.0). Exposes `list_runs`, `show_run`, `trend_sr`, `record_run` as MCP tools callable by Claude or any MCP-compatible agent.
+- `serve [--db PATH]` — MCP stdio server (JSON-RPC 2.0). Exposes `list_runs`, `show_run`, `trend_sr`, `record_run` as MCP tools callable by any MCP-compatible agent.
 
 Integration:
 - `runchk.sh`: after `_elapsed` is computed, if `HCPCS_DB` is set → dispatch binary with `record --elapsed ${_elapsed}` (+ `--customer` from `HCPCS_CUSTOMER` env var).
 - `gsc_healthcheck.sh`: passes `HCPCS_CUSTOMER="${_customer}"` when calling `runchk.sh`.
-- `~/.claude/settings.json`: registers `hcpcs_db serve` as an MCP server so Claude can call DB tools natively.
+- `~/.config/agent/settings.json`: registers `hcpcs_db serve` as an MCP server so compatible tools can call DB functions natively.
 - `~/.claude/skills/hcpcs-db.md`: `/hcpcs-db` skill for manual invocation (list/show/trend/record).
 
 Default DB path: `~/.local/share/hcpcs/results.db` (overridden by `HCPCS_DB` env var).

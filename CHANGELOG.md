@@ -153,7 +153,7 @@ e2d8f2d623de1311ec59d86ba5c63cf23fe70ce8e171b1705679a3f5f3657644  process_health
 ```
 
 ## v1.2.68
-- hcpcs_db: Add `serve` subcommand — JSON-RPC 2.0 MCP stdio server exposing four tools: `list_runs`, `show_run`, `trend_sr`, `record_run`. Refactored `cmdList/Show/Trend/Record` to use `io.Writer` helpers so CLI and MCP paths share the same query logic. Registered in `~/.claude/settings.json` as an MCP server and as a `/hcpcs-db` Claude Code skill.
+- hcpcs_db: Add `serve` subcommand — JSON-RPC 2.0 MCP stdio server exposing four tools: `list_runs`, `show_run`, `trend_sr`, `record_run`. Refactored `cmdList/Show/Trend/Record` to use `io.Writer` helpers so CLI and MCP paths share the same query logic. Registered as an MCP server and as a `/hcpcs-db` database skill.
 - chk_partition_sizes: New Go binary (`chk_partition_sizes/`) that reads `partitionSize` from all `clusterPartitionState_Metadata-Coordination_*.json` files, deduplicates by partition ID, sorts descending, writes a flat tab-separated file, and emits `[WARNING]` if the largest partition ≥ 1.5× the split threshold. Threshold accepts unit suffixes (Gi/G/Mi/M/Ki/K, all binary). Shell wrapper `chk_partition_sizes.sh` dispatches the binary with platform detection and falls back to jq.
 - chk_cluster.sh: Add minimum CS product version check. Sources `cs_version.conf` (`_cs_version=2.1.65`); emits `[WARNING]` when the detected version is below the minimum.
 - chk_docker.sh: Add minimum Docker version check. Sources `docker_version.conf` (`_minimum_version=20.10.5`); emits `[WARNING]` when the detected Docker version is below the minimum.
