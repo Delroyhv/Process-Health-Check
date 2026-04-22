@@ -1,11 +1,14 @@
-## Unreleased
-- gsc_grafana.sh: Add `--cleanup` to stop/remove a running Grafana container, `--increment` to auto-suffix container names on collision, and improved `-D` directory ingestion so dashboard JSON files and compressed archives inside a directory are loaded correctly. Also add explicit launch diagnostics, keep `--help` available without root, and document the new workflows.
-- gsc_prometheus.sh, gsc_airgap.sh, gsc_grafana.sh: Normalize help handling so `-h|--help` works without requiring root or other privileged prechecks.
+## v1.4.3
+- gsc_grafana.sh: Add datasource CRUD/list support against a specific Grafana API endpoint with stable Grafana `uid` handling. Datasource add/remove/list now supports `--grafana-server`, `--grafana-user`, and `--grafana-token`, and remove can match by datasource name or `uid`.
+- gsc_grafana.sh: Add `--cleanup` and `--increment`, improve `-D` dashboard ingestion for directories and archives, and make the help path available without requiring root.
+- gsc_grafana.sh, gsc_prometheus.sh, gsc_airgap.sh: Normalize help handling so `-h|--help` works without root or other privileged prechecks.
 - Helper scripts: Normalize legacy `usage()` handling across the repo so `-h|--help` exits cleanly for the remaining check and parser scripts.
 - gsc_core.sh: Harden size parsing to accept fractional inputs safely.
 - test_concurrency.sh: Fix background PID tracking and update Grafana port/container-path handling for concurrent runs.
-- Add regression coverage for `partition_growth`, `chk_alerts`, Grafana dashboard ingestion, and `hcpcs_alertengine`; wire the new tests into `make test` and the `hcpcs_alertengine` Makefile.
+- Add regression coverage for `partition_growth`, `chk_alerts`, Grafana dashboard ingestion, Grafana datasource CRUD/listing, and `hcpcs_alertengine`; wire the new tests into `make test` and the `hcpcs_alertengine` Makefile.
 - Update `README.md`, `CODE.md`, and script help text to document the new Grafana and test workflows.
+
+## Unreleased
 
 ## v1.4.2
 - gsc_prometheus.sh: Log directory changed from version-stamped path (`/var/log/gsc_prometheus/v<version>/`) to static `/var/log/gsc_prometheus/hcpcs/` — `last_used_port.txt` now persists across releases without relocation.
