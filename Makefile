@@ -39,7 +39,7 @@ bundle: readme
 	  --exclude='./test_*.sh' \
 	  --exclude='./test_*.go' \
 	  --exclude='./mock_curl.sh' \
-	  --exclude='./CLAUDE.md' \
+	  --exclude='./CODE.md' \
 	  --exclude='./collect_metrics.sh' \
 	  --exclude='./chk_collected_metrics.sh' \
 	  --exclude='./hcpcs_db' \

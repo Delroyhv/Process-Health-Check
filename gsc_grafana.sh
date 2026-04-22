@@ -24,6 +24,9 @@ _datasource_name="Prometheus"
 _datasource_specs=()
 _datasource_uids=()
 _remove_datasource_names=()
+_grafana_server_url="http://127.0.0.1:3000"
+_grafana_user="admin"
+_grafana_token="admin"
 _grafana_port="3000"
 _admin_password="admin"
 _update_dashboards=0
@@ -32,6 +35,7 @@ _cleanup_mode=0
 _cleanup_volumes=0
 _increment_mode=0
 _override_confirm=""
+_grafana_crud_mode=0
 _script_name=$(basename "$0")
 _dashboard_dir="dashboards"
 _provisioning_dir="provisioning"
@@ -63,6 +67,9 @@ Additional Options:
   --datasource NAME=URL              Add a datasource entry for provisioning (repeatable)
   --remove-datasource NAME           Remove a datasource entry from provisioning (repeatable)
   --list-datasources                 Print resolved datasources and exit
+  --grafana-server HOST:PORT         Target Grafana API endpoint for datasource CRUD/list operations
+  --grafana-user USER                Grafana API username (default: admin)
+  --grafana-token TOKEN              Grafana API token/password (default: admin)
   -g, --grafana-port PORT            Specify the Grafana port (default: 3000)
   --admin-password PASSWORD          Specify the Grafana admin password (default: admin)
   --update                           Update existing dashboards without clearing the directory
@@ -79,6 +86,8 @@ Additional Options:
     sudo $_script_name --docker --cleanup --override=y
     sudo $_script_name --docker -D DashBoards --increment
     sudo $_script_name --docker --datasource Loki=http://127.0.0.1:3100 --list-datasources
+    sudo $_script_name --docker --grafana-server 127.0.0.1:3001 --list-datasources
+    sudo $_script_name --docker --grafana-server 127.0.0.1:3001 --grafana-user admin --grafana-token admin --datasource Loki=http://127.0.0.1:3100
 EOF
     exit "${_exit_code}"
 }
@@ -111,6 +120,56 @@ make_datasource_uid() {
     else
         printf 'ds_%s\n' "$(printf '%s' "${_raw}" | cksum | awk '{print $1}')"
     fi
+}
+
+grafana_api_curl() {
+    local _method="$1"
+    local _path="$2"
+    shift 2
+    curl -fsS -u "${_grafana_user}:${_grafana_token}" \
+        -H "Content-Type: application/json" \
+        -X "${_method}" "${_grafana_server_url}${_path}" "$@"
+}
+
+grafana_api_list_datasources() {
+    gsc_require jq
+    grafana_api_curl GET "/api/datasources" | jq -r '.[] | "\(.name) [\(.uid)] => \(.url)"'
+}
+
+grafana_api_add_datasource() {
+    local _spec
+    for _spec in "${_datasource_specs[@]}"; do
+        local _name="${_spec%%=*}"
+        local _url="${_spec#*=}"
+        local _uid
+        _uid=$(make_datasource_uid "${_name}" "${_url}")
+        local _payload
+        _payload=$(cat <<EOF
+{"name":"${_name}","uid":"${_uid}","type":"prometheus","access":"proxy","url":"${_url}","isDefault":false,"editable":true}
+EOF
+)
+        if grafana_api_curl POST "/api/datasources" -d "${_payload}" >/dev/null; then
+            gsc_log_ok "Added datasource via Grafana API: ${_name} [${_uid}]"
+        else
+            gsc_log_error "Failed to add datasource via Grafana API: ${_name}"
+            exit 1
+        fi
+    done
+}
+
+grafana_api_remove_datasource() {
+    local _target _ds_json _ds_uid _ds_name
+    for _target in "${_remove_datasource_names[@]}"; do
+        _ds_json="$(grafana_api_curl GET "/api/datasources" | jq -r --arg tgt "${_target}" '.[] | select(.name == $tgt or .uid == $tgt) | @base64' | head -n1 || true)"
+        if [[ -z "${_ds_json}" ]]; then
+            gsc_log_warn "Datasource not found on Grafana server: ${_target}"
+            continue
+        fi
+        _ds_name="$(printf '%s' "${_ds_json}" | base64 -d | jq -r '.name')"
+        _ds_uid="$(printf '%s' "${_ds_json}" | base64 -d | jq -r '.uid')"
+        grafana_api_curl DELETE "/api/datasources/uid/${_ds_uid}" >/dev/null
+        gsc_log_ok "Removed datasource via Grafana API: ${_ds_name} [${_ds_uid}]"
+    done
 }
 
 # -------------------------------
@@ -179,7 +238,7 @@ query_prometheus_sources() {
 
 list_datasources() {
     local _spec
-    gsc_log_info "Resolved datasource entries:"
+    gsc_log_info "Resolved datasource entries for Grafana server: ${_grafana_server_url}"
     for _spec in "${_datasource_specs[@]}"; do
         local _name="${_spec%%=*}"
         local _url="${_spec#*=}"
@@ -347,11 +406,17 @@ parse_args() {
             -i|--input|--prometheus-data-source)
                 shift; _datasource_url="http://$1"; shift ;;
             --datasource)
-                shift; parse_datasource_spec "$1"; shift ;;
+                shift; parse_datasource_spec "$1"; _grafana_crud_mode=1; shift ;;
             --remove-datasource)
-                shift; _remove_datasource_names+=("$1"); shift ;;
+                shift; _remove_datasource_names+=("$1"); _grafana_crud_mode=1; shift ;;
             --list-datasources)
-                _query_mode=2; shift ;;
+                _query_mode=2; _grafana_crud_mode=1; shift ;;
+            --grafana-server)
+                shift; _grafana_server_url="http://$1"; shift ;;
+            --grafana-user)
+                shift; _grafana_user="$1"; shift ;;
+            --grafana-token)
+                shift; _grafana_token="$1"; shift ;;
             -g|--grafana-port)
                 shift; _grafana_port="$1"; shift ;;
             --admin-password)
@@ -614,7 +679,21 @@ if [[ ${#_remove_datasource_names[@]} -gt 0 ]]; then
 fi
 
 if [[ "${_query_mode}" -eq 2 ]]; then
-    list_datasources
+    if [[ -z "${_container_engine}" && ${#_dashboards[@]} -eq 0 && -z "${_url}" && -z "${_git_repo}" ]]; then
+        grafana_api_list_datasources
+    else
+        list_datasources
+    fi
+    exit 0
+fi
+
+if [[ "${_grafana_crud_mode}" -eq 1 && "${_container_engine}" == "" && "${#_dashboards[@]}" -eq 0 && -z "${_url}" && -z "${_git_repo}" ]]; then
+    if [[ ${#_remove_datasource_names[@]} -gt 0 ]]; then
+        grafana_api_remove_datasource
+    fi
+    if [[ ${#_datasource_specs[@]} -gt 0 ]]; then
+        grafana_api_add_datasource
+    fi
     exit 0
 fi
 

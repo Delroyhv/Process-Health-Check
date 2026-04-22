@@ -149,6 +149,7 @@ sudo ./gsc_grafana.sh \
 | `--datasource NAME=URL` | Add a datasource entry to provisioning (repeatable) |
 | `--remove-datasource NAME` | Remove a datasource entry from provisioning (repeatable) |
 | `--list-datasources` | Print the resolved datasource list and exit |
+| `--grafana-server HOST:PORT` | Target a specific Grafana API endpoint for datasource CRUD/list operations |
 | `-g`, `--grafana-port PORT` | Specify the Grafana port (default: 3000) |
 | `--admin-password PASSWORD` | Specify the Grafana admin password (default: admin) |
 | `--update` | Update configuration without clearing existing dashboards |
@@ -164,6 +165,7 @@ Notes:
   - `--increment` is useful when you want to run multiple Grafana instances with the same customer/SR pair without container-name collisions.
   - `--datasource` can be repeated to add extra provisioning entries; `--remove-datasource` removes one by name before provisioning.
   - `--list-datasources` prints the final resolved datasource list and its Grafana `uid` values, then exits without starting Grafana.
+  - `--grafana-server` changes the Grafana endpoint used by datasource CRUD/list operations.
 
 Grafana is accessible at `http://localhost:3000` (or your custom port) (admin/admin). Provisioned data sources are set to `editable: true`.
 

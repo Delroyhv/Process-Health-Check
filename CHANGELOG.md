@@ -5,7 +5,7 @@
 - gsc_core.sh: Harden size parsing to accept fractional inputs safely.
 - test_concurrency.sh: Fix background PID tracking and update Grafana port/container-path handling for concurrent runs.
 - Add regression coverage for `partition_growth`, `chk_alerts`, Grafana dashboard ingestion, and `hcpcs_alertengine`; wire the new tests into `make test` and the `hcpcs_alertengine` Makefile.
-- Update `README.md`, `CLAUDE.md`, and script help text to document the new Grafana and test workflows.
+- Update `README.md`, `CODE.md`, and script help text to document the new Grafana and test workflows.
 
 ## v1.4.2
 - gsc_prometheus.sh: Log directory changed from version-stamped path (`/var/log/gsc_prometheus/v<version>/`) to static `/var/log/gsc_prometheus/hcpcs/` — `last_used_port.txt` now persists across releases without relocation.
@@ -102,7 +102,7 @@ e2d8f2d623de1311ec59d86ba5c63cf23fe70ce8e171b1705679a3f5f3657644  process_health
 - expand_hcpcs_support.sh: Fix `xz -d -9` → `xz -d -T0`. The `-9` compression-level flag is silently ignored during decompression; `-T0` enables multi-threaded decompression (parallelism realized when source archive has multiple xz blocks).
 - test_battery.sh: Integrate `HCPCS_DB` / `HCPCS_CUSTOMER` env vars into runchk.sh Step D calls to record results in hcpcs_db. Fix Step E to call `gsc_healthcheck_report.sh` directly instead of re-running all 20+ check scripts via `runchk.sh --report`. Fix `_HCPCS_DB` default path to use `${HOME}` instead of hardcoded user path.
 - test_concurrency.go: Add `context.WithTimeout` (10 min per goroutine) so hung Prometheus calls are cancelled automatically. Add error checking on setup/cleanup commands. Remove stale sed-based seeding workaround (fix is now in gsc_prometheus.sh source).
-- CLAUDE.md: Add coding conventions (variable naming, inline comments, modularity), Version Bump Rules section, and clarify Release Process step 1.
+- CODE.md: Add coding conventions (variable naming, inline comments, modularity), Version Bump Rules section, and clarify Release Process step 1.
 
 ### SHA256
 ```
@@ -246,7 +246,7 @@ c8e8290c26565d68dde5f877bcd437c6fa3bfa78afa330d43326f815cb64184d  process_health
 - gsc_healthcheck.sh: Fix `mktemp` failure on systems where `/tmp` is not writable. Changed from `mktemp` (file in TMPDIR) to `mktemp -d` (unique subdir); register only the subdir with `gsc_add_tmp_dir`, not the parent TMPDIR, preventing subsequent SR runs from failing when cleanup wipes the base temp directory.
 - gsc_healthcheck_report.sh: Fix `_count_severity` arithmetic error — `grep -c` exits 1 on no match; using `|| echo 0` produced `"0\n0"` which broke `$(( ... ))`. Changed to `|| true`.
 - test_battery.sh: New full-sequence battery integration test — deploys repo, runs global Prometheus cleanup, then for each SR: expand → find run dir → find psnap → start Prometheus → runchk → runchk --report. Supports optional SR filter arguments. Logs per-SR and per-run.
-- Makefile: Exclude `test_*.sh`, `test_*.go`, `mock_curl.sh`, and `CLAUDE.md` from the release bundle.
+- Makefile: Exclude `test_*.sh`, `test_*.go`, `mock_curl.sh`, and `CODE.md` from the release bundle.
 - docs: Standardise all examples to customer `ACME`, SR `17762026`.
 
 ### SHA256

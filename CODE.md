@@ -1,4 +1,4 @@
-# CLAUDE.md
+# CODE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -233,7 +233,7 @@ Format: `vMAJOR.MINOR.PATCH`
 1. Determine version bump (see Version Bump Rules above), then update `VERSION` file
 2. Update `CHANGELOG.md` with entry and SHA256
 3. Run `make bundle` — builds Go binaries, updates README version, creates `process_health_vX.Y.Z.tar.xz`
-   - Bundle **excludes**: `test_*.sh`, `test_*.go`, `mock_curl.sh`, `CLAUDE.md`, `.git/`, `*.tar.xz`, `*.sha256`, `*.log`
+   - Bundle **excludes**: `test_*.sh`, `test_*.go`, `mock_curl.sh`, `CODE.md`, `.git/`, `*.tar.xz`, `*.sha256`, `*.log`
 4. Commit changed files (`VERSION`, `CHANGELOG.md`, `README.md`, changed scripts, rebuilt binaries)
 5. Tag: `git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z`
 6. Create GitHub release: `gh release create vX.Y.Z process_health_vX.Y.Z.tar.xz --title "vX.Y.Z" --notes "..."`
