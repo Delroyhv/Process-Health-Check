@@ -81,4 +81,5 @@ test:
 	@./test_partition_growth.sh
 	@./test_chk_alerts.sh
 	@./test_gsc_grafana_ingest.sh
+	@./test_gsc_grafana_datasources.sh
 	@cd hcpcs_alertengine && go test ./...

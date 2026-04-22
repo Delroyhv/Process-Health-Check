@@ -146,6 +146,9 @@ sudo ./gsc_grafana.sh \
 | `--url URL` | Download dashboards from a URL |
 | `--git URL` | Clone a Git repository containing dashboards |
 | `-i`, `--prometheus-data-source IP:PORT` | Specify the Prometheus datasource address |
+| `--datasource NAME=URL` | Add a datasource entry to provisioning (repeatable) |
+| `--remove-datasource NAME` | Remove a datasource entry from provisioning (repeatable) |
+| `--list-datasources` | Print the resolved datasource list and exit |
 | `-g`, `--grafana-port PORT` | Specify the Grafana port (default: 3000) |
 | `--admin-password PASSWORD` | Specify the Grafana admin password (default: admin) |
 | `--update` | Update configuration without clearing existing dashboards |
@@ -159,6 +162,8 @@ Notes:
   - When `-D` points at a directory, `gsc_grafana.sh` copies any dashboard `*.json` files it finds and extracts any dashboard archives (`*.zip`, `*.tar.gz`, `*.tar.xz`) found inside that directory tree.
   - When `-D dashboards` is used, the directory is preserved and re-used as the Grafana staging directory.
   - `--increment` is useful when you want to run multiple Grafana instances with the same customer/SR pair without container-name collisions.
+  - `--datasource` can be repeated to add extra provisioning entries; `--remove-datasource` removes one by name before provisioning.
+  - `--list-datasources` prints the final resolved datasource list and its Grafana `uid` values, then exits without starting Grafana.
 
 Grafana is accessible at `http://localhost:3000` (or your custom port) (admin/admin). Provisioned data sources are set to `editable: true`.
 

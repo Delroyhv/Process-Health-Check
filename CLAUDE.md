@@ -36,7 +36,7 @@ cd hcpcs_db           && make all
 | `gsc_healthcheck.sh` | End-to-end orchestrator: expands support bundle(s) → starts Prometheus per psnap → runs `runchk.sh`. Handles multiple support log directories via `_run_dir_checks()`. |
 | `runchk.sh` | Sequentially runs all `chk_*.sh` and `print_*.sh` checks, summarizes ERRORs/WARNINGs |
 | `gsc_prometheus.sh` | Extracts a `psnap_*.tar.xz` and runs Prometheus in a Docker/Podman container |
-| `gsc_grafana.sh` | Runs Grafana with provisioned HCP dashboards |
+| `gsc_grafana.sh` | Runs Grafana with provisioned HCP dashboards and datasource controls |
 | `selfcheck.sh` | Validates all dependencies and required files (run at start of `runchk.sh`) |
 
 ### Shared Libraries

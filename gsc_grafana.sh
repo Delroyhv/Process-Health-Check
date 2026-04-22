@@ -20,6 +20,10 @@ _dashboards=()
 _url=""
 _git_repo=""
 _datasource_url="http://127.0.0.1:9090"
+_datasource_name="Prometheus"
+_datasource_specs=()
+_datasource_uids=()
+_remove_datasource_names=()
 _grafana_port="3000"
 _admin_password="admin"
 _update_dashboards=0
@@ -56,6 +60,9 @@ Core Options:
 Additional Options:
   -i, --input IP:PORT,
   --prometheus-data-source IP:PORT   Specify the Prometheus datasource IP and port (e.g., 172.22.20.26:9090)
+  --datasource NAME=URL              Add a datasource entry for provisioning (repeatable)
+  --remove-datasource NAME           Remove a datasource entry from provisioning (repeatable)
+  --list-datasources                 Print resolved datasources and exit
   -g, --grafana-port PORT            Specify the Grafana port (default: 3000)
   --admin-password PASSWORD          Specify the Grafana admin password (default: admin)
   --update                           Update existing dashboards without clearing the directory
@@ -71,8 +78,39 @@ Additional Options:
     sudo $_script_name --podman --query
     sudo $_script_name --docker --cleanup --override=y
     sudo $_script_name --docker -D DashBoards --increment
+    sudo $_script_name --docker --datasource Loki=http://127.0.0.1:3100 --list-datasources
 EOF
     exit "${_exit_code}"
+}
+
+add_default_datasource() {
+    _datasource_specs+=("${_datasource_name}=${_datasource_url}")
+}
+
+parse_datasource_spec() {
+    local _spec="$1"
+    local _name="${_spec%%=*}"
+    local _url="${_spec#*=}"
+
+    if [[ -z "${_name}" || -z "${_url}" || "${_name}" == "${_spec}" ]]; then
+        gsc_log_error "Invalid datasource specification: ${_spec} (expected NAME=URL)"
+        exit 1
+    fi
+
+    _datasource_specs+=("${_name}=${_url}")
+}
+
+make_datasource_uid() {
+    local _name="$1"
+    local _url="$2"
+    local _raw="${_name}|${_url}"
+    if command -v sha256sum >/dev/null 2>&1; then
+        printf 'ds_%s\n' "$(printf '%s' "${_raw}" | sha256sum | awk '{print substr($1,1,12)}')"
+    elif command -v shasum >/dev/null 2>&1; then
+        printf 'ds_%s\n' "$(printf '%s' "${_raw}" | shasum -a 256 | awk '{print substr($1,1,12)}')"
+    else
+        printf 'ds_%s\n' "$(printf '%s' "${_raw}" | cksum | awk '{print $1}')"
+    fi
 }
 
 # -------------------------------
@@ -137,6 +175,18 @@ query_prometheus_sources() {
 
     _datasource_url="http://$_selected_ip:$_selected_port"
     gsc_log_ok "Datasource set to: $_datasource_url"
+}
+
+list_datasources() {
+    local _spec
+    gsc_log_info "Resolved datasource entries:"
+    for _spec in "${_datasource_specs[@]}"; do
+        local _name="${_spec%%=*}"
+        local _url="${_spec#*=}"
+        local _uid
+        _uid=$(make_datasource_uid "${_name}" "${_url}")
+        printf '  - %s [%s] => %s\n' "${_name}" "${_uid}" "${_url}"
+    done
 }
 
 # -------------------------------
@@ -296,6 +346,12 @@ parse_args() {
                 shift; _git_repo="$1"; shift ;;
             -i|--input|--prometheus-data-source)
                 shift; _datasource_url="http://$1"; shift ;;
+            --datasource)
+                shift; parse_datasource_spec "$1"; shift ;;
+            --remove-datasource)
+                shift; _remove_datasource_names+=("$1"); shift ;;
+            --list-datasources)
+                _query_mode=2; shift ;;
             -g|--grafana-port)
                 shift; _grafana_port="$1"; shift ;;
             --admin-password)
@@ -385,6 +441,26 @@ clone_git_repo() {
     _dashboards+=("${_repo_files[@]}")
 }
 
+prune_datasources() {
+    local -a _kept=()
+    local _spec _remove
+    for _spec in "${_datasource_specs[@]}"; do
+        local _name="${_spec%%=*}"
+        local _url="${_spec#*=}"
+        local _uid
+        _uid=$(make_datasource_uid "${_name}" "${_url}")
+        local _drop=0
+        for _remove in "${_remove_datasource_names[@]}"; do
+            if [[ "${_name}" == "${_remove}" || "${_uid}" == "${_remove}" ]]; then
+                _drop=1
+                break
+            fi
+        done
+        [[ "${_drop}" -eq 0 ]] && _kept+=("${_spec}")
+    done
+    _datasource_specs=("${_kept[@]}")
+}
+
 # -------------------------------
 # Prepare file structure and provisioning
 # -------------------------------
@@ -415,6 +491,11 @@ prepare_structure() {
 
     mkdir -p "$_provisioning_dir/dashboards" "$_provisioning_dir/datasources"
 
+    if [[ ${#_datasource_specs[@]} -eq 0 ]]; then
+        gsc_log_error "No datasources resolved for provisioning."
+        exit 1
+    fi
+
     for _file in "${_dashboards[@]}"; do
         if [[ -d "$_file" ]]; then
             ingest_dashboard_dir "$_file"
@@ -443,13 +524,28 @@ EOF
     cat > "$_provisioning_dir/datasources/datasource.yaml" <<EOF
 apiVersion: 1
 datasources:
-  - name: Prometheus
+EOF
+
+    local _spec
+    local _is_first=1
+    for _spec in "${_datasource_specs[@]}"; do
+        local _name="${_spec%%=*}"
+        local _url="${_spec#*=}"
+        local _uid
+        _uid=$(make_datasource_uid "${_name}" "${_url}")
+        local _is_default="false"
+        [[ "${_is_first}" -eq 1 ]] && _is_default="true"
+        cat >> "$_provisioning_dir/datasources/datasource.yaml" <<EOF
+  - name: ${_name}
+    uid: ${_uid}
     type: prometheus
     access: proxy
-    url: "${_datasource_url}"
-    isDefault: true
+    url: "${_url}"
+    isDefault: ${_is_default}
     editable: true
 EOF
+        _is_first=0
+    done
 }
 
 # -------------------------------
@@ -510,6 +606,17 @@ launch_grafana() {
 # Main
 # -------------------------------
 parse_args "$@"
+
+add_default_datasource
+
+if [[ ${#_remove_datasource_names[@]} -gt 0 ]]; then
+    prune_datasources
+fi
+
+if [[ "${_query_mode}" -eq 2 ]]; then
+    list_datasources
+    exit 0
+fi
 
 if [[ "${_cleanup_volumes}" -eq 1 && "${_cleanup_mode}" -eq 0 ]]; then
     gsc_log_error "--volume requires --cleanup"

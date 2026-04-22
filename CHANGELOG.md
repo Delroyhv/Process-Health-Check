@@ -1,7 +1,11 @@
 ## Unreleased
-- Added repository regression coverage for `partition_growth` and `chk_alerts`, plus a Go test for `hcpcs_alertengine`.
-- Added a root `make test` target that runs the new regressions and the `hcpcs_alertengine` Go test.
-- Hardened `gsc_core.sh` size parsing and fixed `test_concurrency.sh` PID/port-tracking logic.
+- gsc_grafana.sh: Add `--cleanup` to stop/remove a running Grafana container, `--increment` to auto-suffix container names on collision, and improved `-D` directory ingestion so dashboard JSON files and compressed archives inside a directory are loaded correctly. Also add explicit launch diagnostics, keep `--help` available without root, and document the new workflows.
+- gsc_prometheus.sh, gsc_airgap.sh, gsc_grafana.sh: Normalize help handling so `-h|--help` works without requiring root or other privileged prechecks.
+- Helper scripts: Normalize legacy `usage()` handling across the repo so `-h|--help` exits cleanly for the remaining check and parser scripts.
+- gsc_core.sh: Harden size parsing to accept fractional inputs safely.
+- test_concurrency.sh: Fix background PID tracking and update Grafana port/container-path handling for concurrent runs.
+- Add regression coverage for `partition_growth`, `chk_alerts`, Grafana dashboard ingestion, and `hcpcs_alertengine`; wire the new tests into `make test` and the `hcpcs_alertengine` Makefile.
+- Update `README.md`, `CLAUDE.md`, and script help text to document the new Grafana and test workflows.
 
 ## v1.4.2
 - gsc_prometheus.sh: Log directory changed from version-stamped path (`/var/log/gsc_prometheus/v<version>/`) to static `/var/log/gsc_prometheus/hcpcs/` — `last_used_port.txt` now persists across releases without relocation.
