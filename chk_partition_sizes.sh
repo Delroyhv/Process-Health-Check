@@ -50,6 +50,10 @@ ${_this_filename} [-d <dir>] [-o <output>]
 }
 
 getOptions() {
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
     while getopts "d:o:h" _opt; do
         case "${_opt}" in
             d) _log_dir="${OPTARG}" ;;

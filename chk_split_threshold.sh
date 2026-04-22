@@ -39,6 +39,14 @@ ${_this} [-d <dir>] [-o <output>]
 }
 
 getOptions() {
+    for _arg in "$@"; do
+        case "${_arg}" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+        esac
+    done
     while getopts "d:o:h" _opt; do
         case "${_opt}" in
             d) _log_dir="${OPTARG}" ;;

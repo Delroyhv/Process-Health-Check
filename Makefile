@@ -5,7 +5,7 @@ VERSION := $(shell cat VERSION 2>/dev/null | tr -d '[:space:]')
 BUNDLE_NAME ?= process_health_$(VERSION)
 OUT ?= $(BUNDLE_NAME).tar.xz
 
-.PHONY: bundle lint bash-n docs readme
+.PHONY: bundle lint bash-n docs readme test
 
 readme:
 	@sed -i 's/^\*\*Current version:\*\* .*/\*\*Current version:\*\* $(VERSION)/' README.md
@@ -75,3 +75,10 @@ lint:
 	else \
 	  echo "shellcheck not installed"; \
 	fi
+
+test:
+	@echo "Running repository regression checks"
+	@./test_partition_growth.sh
+	@./test_chk_alerts.sh
+	@./test_gsc_grafana_ingest.sh
+	@cd hcpcs_alertengine && go test ./...

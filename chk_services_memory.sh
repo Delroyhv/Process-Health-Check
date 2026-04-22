@@ -109,6 +109,10 @@ ${_this_filename} :
 # Check the input parameters:
 #
 getOptions() {
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        usage
+        exit 0
+    fi
     local _opt
     while getopts "f:F:d:s:S:o:t:m:I:kvh" _opt; do
         case ${_opt} in

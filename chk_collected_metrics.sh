@@ -79,6 +79,14 @@ _oldest_date_epoch=0  # Prometheus oldest date - epoch time
 #
 getOptions() {
     local _opt
+    for _arg in "$@"; do
+        case "${_arg}" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+        esac
+    done
     while getopts "c:v:f:q:o:bwh" _opt; do
         case ${_opt} in
             c)  _collected_telemetry_file=${OPTARG}

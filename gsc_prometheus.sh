@@ -280,6 +280,16 @@ _main() {
     if [[ "${_prev}" == "--engine" && "${_a}" == "query" ]]; then
       _query_engine; return 0
     fi
+    case "${_a}" in
+      -h|--help)
+        _usage
+        return 0
+        ;;
+      --version)
+        echo "${_script_version}"
+        return 0
+        ;;
+    esac
     _prev="${_a}"
   done
 

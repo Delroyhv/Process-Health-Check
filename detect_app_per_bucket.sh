@@ -35,9 +35,9 @@ $thisfilename :
          default: ${OUTPUT_FILE}"
 }
 
-if [[ "$1" == "-h" ]]; then
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
-    exit
+    exit 0
 fi
 
 TOOLDIR=$(dirname "$0")

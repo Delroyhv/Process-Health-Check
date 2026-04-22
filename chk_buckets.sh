@@ -35,6 +35,14 @@ ${_this_filename} [-d <dir>] [-o <output>] [--bucket-owner]
 }
 
 getOptions() {
+    for _arg in "$@"; do
+        case "${_arg}" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+        esac
+    done
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -d) _log_dir="$2"; shift 2 ;;

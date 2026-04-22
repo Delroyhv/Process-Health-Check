@@ -112,7 +112,7 @@ Prometheus options (required for --start):
 Grafana options (optional for --start):
   -D, --dashboard FILE         Dashboard JSON or archive (repeatable; .json/.zip/.tar.gz/.tar.xz)
   -g, --grafana-port PORT      Grafana listen port (default: ${_grafana_port})
-  -i, --datasource IP:PORT     Prometheus datasource address (default: auto from prom port)
+  -i, --datasource IP:PORT     Prometheus datasource address (alias: --prometheus-data-source; default: auto from prom port)
   --admin-password PASSWORD    Grafana admin password (default: ${_admin_password})
 
 Image options:
@@ -606,6 +606,16 @@ _resolve_engine() {
 # Argument parsing and entry point
 # ---------------------------------------------------------------------------
 _main() {
+  local _a
+  for _a in "$@"; do
+    case "${_a}" in
+      -h|--help)
+        _usage
+        return 0
+        ;;
+    esac
+  done
+
   gsc_require_root
 
   while [[ $# -gt 0 ]]; do

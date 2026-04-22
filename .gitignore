@@ -15,6 +15,10 @@ gsc_docker_prometheus.sh
 # Claude Code local settings
 ./settings.local.json
 
+# Local regression tests added for development
+test_*.sh
+*_test.go
+
 # Go build artifacts (partition_growth/build/ binaries are intentionally tracked)
 partition_growth/*.test
 

@@ -26,6 +26,7 @@ _update_dashboards=0
 _query_mode=0
 _cleanup_mode=0
 _cleanup_volumes=0
+_increment_mode=0
 _override_confirm=""
 _script_name=$(basename "$0")
 _dashboard_dir="dashboards"
@@ -38,6 +39,7 @@ _container_name=""   # resolved after parse_args
 # Helper: Print usage
 # -------------------------------
 print_usage() {
+    local _exit_code="${1:-1}"
     cat <<EOF
 Usage: $_script_name [-p|--podman] [-d|--docker] -D|--dashboard [file|dir ...] [options]
 
@@ -59,6 +61,7 @@ Additional Options:
   --update                           Update existing dashboards without clearing the directory
   --query                            Scan for running Prometheus containers and healthcheck.conf to set the datasource
   --cleanup                          Stop and remove the Grafana container
+  --increment                        Auto-increment container name if one already exists
   --volume                           Delete dashboards and provisioning directories during cleanup (requires --cleanup)
   --override=y                       Skip confirmation prompts for cleanup
 
@@ -66,8 +69,10 @@ Additional Options:
     sudo $_script_name --docker -D dashboard1.json dashboards.zip
     sudo $_script_name --podman --prometheus-data-source 172.22.20.26:9090 --grafana-port 3001 --update
     sudo $_script_name --podman --query
+    sudo $_script_name --docker --cleanup --override=y
+    sudo $_script_name --docker -D DashBoards --increment
 EOF
-    exit 1
+    exit "${_exit_code}"
 }
 
 # -------------------------------
@@ -142,7 +147,11 @@ cleanup_grafana() {
     [[ -z "$_runtime" ]] && { command -v podman >/dev/null 2>&1 && _runtime="podman" || _runtime="docker"; }
 
     local _containers
-    _containers=$("${_runtime}" ps -a --format '{{.Names}}' | grep -E "^gsc_grafana_" || true)
+    if [[ -n "${_container_name:-}" ]]; then
+        _containers=$("${_runtime}" ps -a --format '{{.Names}}' | grep -E "^${_container_name}$" || true)
+    else
+        _containers=$("${_runtime}" ps -a --format '{{.Names}}' | grep -E "^gsc_grafana_" || true)
+    fi
 
     if [[ -z "${_containers}" && "${_cleanup_volumes}" -eq 0 ]]; then
         gsc_log_info "No Grafana containers found."
@@ -205,6 +214,64 @@ extract_archive() {
 }
 
 # -------------------------------
+# Ingest a dashboard directory
+# -------------------------------
+ingest_dashboard_dir() {
+    local _dir="$1"
+    local -a _files=()
+    local -a _jsons=()
+    local -a _archives=()
+
+    gsc_log_info "Ingesting dashboard directory: ${_dir}"
+
+    mapfile -t _files < <(find "$_dir" -type f | sort)
+    if [[ ${#_files[@]} -eq 0 ]]; then
+        gsc_log_error "Dashboard directory is empty: $_dir"
+        exit 1
+    fi
+
+    mapfile -t _jsons < <(find "$_dir" -type f -name '*.json' | sort)
+    mapfile -t _archives < <(find "$_dir" -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.tar.xz' \) | sort)
+
+    if [[ ${#_jsons[@]} -eq 0 && ${#_archives[@]} -eq 0 ]]; then
+        gsc_log_error "Directory contains files, but no dashboard JSON or archives were found: $_dir"
+        exit 1
+    fi
+
+    if [[ ${#_jsons[@]} -gt 0 ]]; then
+        for _jf in "${_jsons[@]}"; do
+            local _dest="${_dashboard_dir}/$(basename "$_jf")"
+            [[ "$_jf" == "$_dest" ]] && continue
+            cp "$_jf" "$_dashboard_dir/"
+        done
+    fi
+
+    if [[ ${#_archives[@]} -gt 0 ]]; then
+        for _af in "${_archives[@]}"; do
+            extract_archive "$_af"
+        done
+    fi
+}
+
+resolve_container_name() {
+    local _runtime="${_container_engine:-}"
+    local _base="gsc_grafana_${_customer}_${_sr_number}"
+    local _name="${_base}"
+    local _suffix=2
+
+    [[ -z "$_runtime" ]] && { command -v podman >/dev/null 2>&1 && _runtime="podman" || _runtime="docker"; }
+
+    if [[ "${_increment_mode}" -eq 1 ]]; then
+        while "${_runtime}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "${_name}"; do
+            _name="${_base}_${_suffix}"
+            ((_suffix++))
+        done
+    fi
+
+    printf '%s\n' "${_name}"
+}
+
+# -------------------------------
 # Parse command-line arguments
 # -------------------------------
 parse_args() {
@@ -239,11 +306,15 @@ parse_args() {
                 _query_mode=1; shift ;;
             --cleanup)
                 _cleanup_mode=1; shift ;;
+            --increment)
+                _increment_mode=1; shift ;;
             --volume)
                 _cleanup_volumes=1; shift ;;
             --override=y)
                 _override_confirm="y"; shift ;;
-            -*) gsc_log_error "Unknown option: $1"; print_usage ;;
+            -h|--help)
+                print_usage 0 ;;
+            -*) gsc_log_error "Unknown option: $1"; print_usage 1 ;;
         esac
     done
 }
@@ -318,24 +389,35 @@ clone_git_repo() {
 # Prepare file structure and provisioning
 # -------------------------------
 prepare_structure() {
+    local _preserve_dashboard_dir=0
+    local _file
+    for _file in "${_dashboards[@]}"; do
+        if [[ "${_file}" == "${_dashboard_dir}" ]]; then
+            _preserve_dashboard_dir=1
+            break
+        fi
+    done
+
     if [[ "$_update_dashboards" -eq 0 ]]; then
         if [[ -d "$_dashboard_dir" && ! -w "$_dashboard_dir" ]]; then
             gsc_log_error "Cannot remove '${_dashboard_dir}': permission denied (created by a previous sudo/docker run)."
             gsc_log_error "Fix: sudo rm -rf '${_dashboard_dir}' '${_provisioning_dir}'"
             exit 1
         fi
-        rm -rf "$_dashboard_dir"
-        mkdir -p "$_dashboard_dir"
+        if [[ "${_preserve_dashboard_dir}" -eq 0 ]]; then
+            rm -rf "$_dashboard_dir"
+            mkdir -p "$_dashboard_dir"
+        else
+            gsc_log_info "Using '${_dashboard_dir}' as both the input dashboard directory and the Grafana staging directory."
+            gsc_log_info "Existing dashboard files will be preserved and re-used."
+        fi
     fi
 
     mkdir -p "$_provisioning_dir/dashboards" "$_provisioning_dir/datasources"
 
     for _file in "${_dashboards[@]}"; do
         if [[ -d "$_file" ]]; then
-            local -a _dir_jsons=()
-            mapfile -t _dir_jsons < <(find "$_file" -maxdepth 2 -type f -name '*.json')
-            [[ ${#_dir_jsons[@]} -eq 0 ]] && gsc_log_warn "No JSON files found in directory: $_file"
-            for _jf in "${_dir_jsons[@]}"; do cp "$_jf" "$_dashboard_dir/"; done
+            ingest_dashboard_dir "$_file"
         else
             case "$_file" in
                 *.json)              cp "$_file" "$_dashboard_dir/" ;;
@@ -397,6 +479,8 @@ launch_grafana() {
 
     "${_engine}" rm -f "${_container_name}" >/dev/null 2>&1 || true
 
+    gsc_log_info "Launching Grafana container '${_container_name}' on port ${_grafana_port} using ${_engine}."
+    gsc_log_info "Mounting dashboards from: $(pwd)/${_dashboard_dir}"
     "${_engine}" run -d \
         --name="${_container_name}" \
         -p "${_grafana_port}:3000" \
@@ -405,7 +489,11 @@ launch_grafana() {
         -v "$(pwd)/${_provisioning_dir}/datasources:/etc/grafana/provisioning/datasources${_vol_opts}" \
         -e GF_SECURITY_ADMIN_USER=admin \
         -e "GF_SECURITY_ADMIN_PASSWORD=${_admin_password}" \
-        grafana/grafana:latest
+        grafana/grafana:latest || {
+            gsc_log_error "${_engine} run failed for ${_container_name}."
+            "${_engine}" ps -a --format '{{.Names}} {{.Status}}' 2>/dev/null | grep -E "^${_container_name} " || true
+            exit 1
+        }
 
     if ! _wait_for_grafana; then
         gsc_log_error "${_engine} failed to start Grafana. Cleaning up..."
@@ -430,7 +518,7 @@ fi
 
 [[ "${_container_engine}" == "docker" ]] && gsc_require_root
 
-_container_name="gsc_grafana_${_customer}_${_sr_number}"
+_container_name="$(resolve_container_name)"
 
 if [[ "$_cleanup_mode" -eq 1 ]]; then
     cleanup_grafana
@@ -441,10 +529,10 @@ fi
 download_url
 clone_git_repo
 
-[[ -z "$_container_engine" ]] && gsc_log_error "Must specify --docker or --podman" && print_usage
+[[ -z "$_container_engine" ]] && gsc_log_error "Must specify --docker or --podman" && print_usage 1
 if [[ $_update_dashboards -eq 0 && ${#_dashboards[@]} -eq 0 ]]; then
     gsc_log_error "At least one dashboard file must be specified with -D, --url, or --git (or use --update to use existing ones)"
-    print_usage
+    print_usage 1
 fi
 
 gsc_require "${_container_engine}" curl

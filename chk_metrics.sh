@@ -109,6 +109,14 @@ _oldest_date_epoch=0  # Prometheus oldest date - epoch time
 #
 getOptions() {
     local _opt
+    for _arg in "$@"; do
+        case "${_arg}" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+        esac
+    done
     while getopts "c:d:v:f:e:i:n:o:q:m:t:s:bwh" _opt; do
         case ${_opt} in
             c)  _prom_name=${OPTARG}
@@ -1021,4 +1029,3 @@ fi
 _script_end_time=$(date -u +%s)
 ((_script_run_seconds=_script_end_time-_current_time_epoch)) || true
 gsc_log_info "Total run time: ${_script_run_seconds} sec"
-

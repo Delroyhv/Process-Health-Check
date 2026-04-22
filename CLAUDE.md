@@ -11,6 +11,7 @@ A health check and monitoring toolkit for **HCP Cloud Scale** (Hitachi Vantara) 
 ```bash
 make bash-n     # Syntax check all .sh files (bash -n)
 make lint       # Run shellcheck on all .sh files
+make test       # Run repo regressions: partition_growth, chk_alerts, hcpcs_alertengine
 make bundle     # Create release tar.xz (also updates README version)
 make docs       # Generate docs/ (Markdown + PDF) from man pages
 ```
@@ -66,6 +67,9 @@ Each check script focuses on one diagnostic area. They are invoked by `runchk.sh
 |--------|------|
 | `test_healthcheck.sh` | End-to-end test: rsync deploy → run `gsc_healthcheck.sh` against each `/ci/<SR>` directory |
 | `test_battery.sh` | Full sequence battery test: deploy → global prometheus cleanup → expand bundle → prometheus → runchk (twice: plain + `--report`) |
+| `test_partition_growth.sh` | Regression test for 6-month growth summary and partition growth output |
+| `test_chk_alerts.sh` | Regression test for alert filtering, event deduplication, and comment-handling |
+| `test_gsc_grafana_ingest.sh` | Regression test for Grafana dashboard directory/archive ingestion |
 
 Both scripts:
 - Accept optional SR filter args: `sudo bash test_battery.sh 05448336 05455380`

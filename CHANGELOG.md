@@ -1,3 +1,8 @@
+## Unreleased
+- Added repository regression coverage for `partition_growth` and `chk_alerts`, plus a Go test for `hcpcs_alertengine`.
+- Added a root `make test` target that runs the new regressions and the `hcpcs_alertengine` Go test.
+- Hardened `gsc_core.sh` size parsing and fixed `test_concurrency.sh` PID/port-tracking logic.
+
 ## v1.4.2
 - gsc_prometheus.sh: Log directory changed from version-stamped path (`/var/log/gsc_prometheus/v<version>/`) to static `/var/log/gsc_prometheus/hcpcs/` — `last_used_port.txt` now persists across releases without relocation.
 - All scripts: Sync `_script_version` / `SCRIPT_VERSION` to match project `VERSION` file (`v1.4.1` → `v1.4.2`). Affected: `gsc_prometheus.sh`, `gsc_airgap.sh`, `expand_hcpcs_support.sh`, `chk_metrics.sh`, `chk_collected_metrics.sh`, `collect_metrics.sh`.

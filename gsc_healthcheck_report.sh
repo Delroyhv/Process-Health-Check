@@ -30,7 +30,7 @@ Usage: $(basename "$0") [-d dir] [-o outfile] [-f md|pdf] [--chart sections] [--
                    (yearly, quarterly, monthly; e.g. quarterly,yearly)
   --forecast N     Embed cluster growth forecast; N = proposed threshold in GB
                    (e.g. --forecast 16 to model a 1 GB -> 16 GB threshold increase)
-  -h               Show this help
+  -h, --help       Show this help
 EOF
 }
 

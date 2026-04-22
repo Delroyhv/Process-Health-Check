@@ -37,6 +37,8 @@ if [[ -z "${SNAP_FILE}" ]]; then
 fi
 echo "[TEST] Using psnap: ${SNAP_FILE}"
 
+PIDS=()
+
 # Function to run a single instance that waits for the barrier
 run_instance() {
     local id=$1
@@ -56,9 +58,9 @@ exec 201>"$BARRIER_FILE"
 flock -x 201
 
 echo "[TEST] Launching 3 concurrent instances..."
-run_instance 1 &
-run_instance 2 &
-run_instance 3 &
+run_instance 1 & PIDS+=("$!")
+run_instance 2 & PIDS+=("$!")
+run_instance 3 & PIDS+=("$!")
 
 sleep 1
 echo "[TEST] GO! (Releasing barrier)"
@@ -67,7 +69,15 @@ flock -u 201
 # Progress Spinner
 spin='-\|/'
 echo -n "[TEST] Processing background tasks... "
-while kill -0 $! 2>/dev/null; do
+while true; do
+  _alive=0
+  for pid in "${PIDS[@]}"; do
+    if kill -0 "${pid}" 2>/dev/null; then
+      _alive=1
+      break
+    fi
+  done
+  [[ "${_alive}" -eq 0 ]] && break
   for i in {0..3}; do
     echo -ne "\b${spin:$i:1}"
     sleep 0.1
@@ -76,7 +86,9 @@ done
 echo -ne "\bDone!\n"
 
 # Wait for them to finish properly
-wait
+for pid in "${PIDS[@]}"; do
+  wait "${pid}"
+done
 
 echo -e "\n[TEST] Results (Podman Status):"
 podman ps --format '{{.Names}} -> {{.Ports}}' | grep "gsc_prometheus" | sort
@@ -87,4 +99,4 @@ for id in 1 2 3; do
 done
 
 echo -e "\n[TEST] Final Port Tracking State:"
-cat /var/log/gsc_prometheus/v1.8.31/last_used_port.txt
+cat /var/log/gsc_prometheus/hcpcs/last_used_port.txt

@@ -531,25 +531,44 @@ gsc_pretty_bytes() {
 # Raw numbers: >2000000 assumed KB (large KiB value), else assumed MB.
 gsc_to_kb() {
     local _size="$1"
-    local _value _unit
-    if [[ "${_size}" =~ ([0-9.]+)([KMGTPEZY]?B?) ]]; then
+    local _value="" _unit="" _kb=""
+
+    if [[ "${_size}" =~ ^([0-9]+([.][0-9]+)?)([KMGTPEZY]?B?)$ ]]; then
         _value="${BASH_REMATCH[1]}"
-        _unit="${BASH_REMATCH[2]}"
-    elif [[ "${_size}" =~ ([0-9.]+) ]]; then
+        _unit="${BASH_REMATCH[3]}"
+    elif [[ "${_size}" =~ ^([0-9]+([.][0-9]+)?)$ ]]; then
         _value="${BASH_REMATCH[1]}"
-        if (( $(echo "$_value > 2000000" | bc -l) )); then
+        if command -v bc >/dev/null 2>&1 && [[ "$(echo "${_value} > 2000000" | bc -l)" == "1" ]]; then
             _unit="KB"
         else
             _unit="MB"
         fi
+    else
+        echo "0"
+        return 0
     fi
+
     case "${_unit}" in
-        "KB"|"K"|"") echo "$_value" ;;
-        "MB"|"M") echo "$((_value * 1024))" ;;
-        "GB"|"G") echo "$((_value * 1024 * 1024))" ;;
-        "TB"|"T") echo "$((_value * 1024 * 1024 * 1024))" ;;
-        *) echo "0" ;;
+        "KB"|"K"|"")
+            _kb="${_value}"
+            ;;
+        "MB"|"M")
+            _kb="$(echo "${_value} * 1024" | bc -l)"
+            ;;
+        "GB"|"G")
+            _kb="$(echo "${_value} * 1024 * 1024" | bc -l)"
+            ;;
+        "TB"|"T")
+            _kb="$(echo "${_value} * 1024 * 1024 * 1024" | bc -l)"
+            ;;
+        *)
+            echo "0"
+            return 0
+            ;;
     esac
+
+    # Return an integer KB value; callers expect a shell-friendly whole number.
+    printf '%s\n' "${_kb%.*}"
 }
 
 # -----------------------------

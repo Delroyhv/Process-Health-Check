@@ -20,6 +20,20 @@ A health check and monitoring toolkit for **HCP Cloud Scale** (Hitachi Vantara) 
 
 Run `./selfcheck.sh` to validate all dependencies and required files before use.
 
+## Testing
+
+Run the repository regression suite with:
+
+```bash
+make test
+```
+
+This runs:
+- `./test_partition_growth.sh`
+- `./test_chk_alerts.sh`
+- `./test_gsc_grafana_ingest.sh`
+- `cd hcpcs_alertengine && go test ./...`
+
 ---
 
 ## Quick Start
@@ -137,8 +151,14 @@ sudo ./gsc_grafana.sh \
 | `--update` | Update configuration without clearing existing dashboards |
 | `--query` | Interactive scan for Prometheus sources to set datasource |
 | `--cleanup` | Stop and remove the Grafana container |
+| `--increment` | Auto-increment the Grafana container name when a matching container already exists |
 | `--volume` | Delete dashboards and provisioning directories during cleanup (requires `--cleanup`) |
 | `--override=y` | Skip confirmation prompts for cleanup |
+
+Notes:
+  - When `-D` points at a directory, `gsc_grafana.sh` copies any dashboard `*.json` files it finds and extracts any dashboard archives (`*.zip`, `*.tar.gz`, `*.tar.xz`) found inside that directory tree.
+  - When `-D dashboards` is used, the directory is preserved and re-used as the Grafana staging directory.
+  - `--increment` is useful when you want to run multiple Grafana instances with the same customer/SR pair without container-name collisions.
 
 Grafana is accessible at `http://localhost:3000` (or your custom port) (admin/admin). Provisioned data sources are set to `editable: true`.
 

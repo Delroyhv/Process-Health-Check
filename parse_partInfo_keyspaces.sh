@@ -15,7 +15,7 @@ $0 <dir-name> [<buckets_names>]
 <buckets-name>  - file name with buckets-uuids mapping"
 }
 
-if [[ "$1" == "-h" ]]; then
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
     exit
 fi
