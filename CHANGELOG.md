@@ -9,6 +9,7 @@
 - Update `README.md`, `CODE.md`, and script help text to document the new Grafana and test workflows.
 
 ## Unreleased
+- Archive older release bundles under `archive/` and ignore them in Git so future releases keep only the current release artifacts at the repo root.
 
 ## v1.4.2
 - gsc_prometheus.sh: Log directory changed from version-stamped path (`/var/log/gsc_prometheus/v<version>/`) to static `/var/log/gsc_prometheus/hcpcs/` — `last_used_port.txt` now persists across releases without relocation.
